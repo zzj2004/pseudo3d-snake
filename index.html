@@ -201,10 +201,30 @@ function draw() {
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  const INSET = 3;
+  const RADIUS = 5;
+  const onLayer = snake.filter(s => s.z === z);
+
   ctx.fillStyle = '#000';
-  for (const s of snake) {
-    if (s.z !== z) continue;
-    ctx.fillRect(s.x * GRID, s.y * GRID, GRID, GRID);
+  for (let i = 0; i + 1 < onLayer.length; i++) {
+    const a = onLayer[i], b = onLayer[i + 1];
+    if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) !== 1) continue;
+    if (a.x === b.x) {
+      const y = Math.min(a.y, b.y);
+      ctx.fillRect(a.x * GRID + INSET, y * GRID + GRID / 2, GRID - INSET * 2, GRID);
+    } else {
+      const x = Math.min(a.x, b.x);
+      ctx.fillRect(x * GRID + GRID / 2, a.y * GRID + INSET, GRID, GRID - INSET * 2);
+    }
+  }
+  for (const s of onLayer) {
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(s.x * GRID + INSET, s.y * GRID + INSET, GRID - INSET * 2, GRID - INSET * 2, RADIUS);
+    } else {
+      ctx.rect(s.x * GRID + INSET, s.y * GRID + INSET, GRID - INSET * 2, GRID - INSET * 2);
+    }
+    ctx.fill();
   }
 
   const h = snake[0];
