@@ -16,13 +16,38 @@
     background: #fff;
     border: 2px solid #000;
   }
+  .wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #000;
+  }
 </style>
 </head>
 <body>
-<canvas id="game" width="400" height="400"></canvas>
+<div class="wrap">
+  <canvas id="game" width="400" height="400"></canvas>
+  <div class="controls">
+    <label for="speed">速度:</label>
+    <input type="range" id="speed" min="80" max="300" step="10" value="150">
+    <span id="speedLabel">150ms</span>
+  </div>
+</div>
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+const speedInput = document.getElementById('speed');
+const speedLabel = document.getElementById('speedLabel');
+speedInput.addEventListener('input', () => {
+  speedLabel.textContent = speedInput.value + 'ms';
+});
 const GRID = 20;
 const COLS = canvas.width / GRID;
 const ROWS = canvas.height / GRID;
@@ -106,7 +131,7 @@ function draw() {
     ctx.fillText('游戏结束', canvas.width / 2, canvas.height / 2 - 10);
     ctx.font = '16px sans-serif';
     ctx.fillText('得分: ' + score, canvas.width / 2, canvas.height / 2 + 20);
-    ctx.fillText('按回车重新开始', canvas.width / 2, canvas.height / 2 + 45);
+    ctx.fillText('点击任意位置重新开始', canvas.width / 2, canvas.height / 2 + 45);
   } else if (paused) {
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -138,10 +163,7 @@ document.addEventListener('keydown', e => {
     return;
   }
 
-  if (over) {
-    if (e.code === 'Enter') reset();
-    return;
-  }
+  if (over) return;
 
   const keyMap = {
     ArrowUp:    {x: 0, y: -1},
@@ -155,10 +177,14 @@ document.addEventListener('keydown', e => {
   if (d.x !== -dir.x || d.y !== -dir.y) nextDir = d;
 });
 
+document.addEventListener('click', () => {
+  if (over) reset();
+});
+
 function loop() {
   step();
   draw();
-  const speed = Math.max(60, 150 - score * 5);
+  const speed = Math.max(60, Number(speedInput.value) - score * 5);
   setTimeout(loop, speed);
 }
 loop();
