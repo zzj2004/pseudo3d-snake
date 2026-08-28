@@ -309,13 +309,18 @@ document.addEventListener('keydown', e => {
   if (d.x !== -dir.x || d.y !== -dir.y) nextDir = d;
 });
 
-function loop() {
+function tick() {
   step();
-  draw();
   const speed = Math.max(50, Math.min(600, Number(speedInput.value) + speedOffset - score * 5));
-  setTimeout(loop, speed);
+  setTimeout(tick, speed);
 }
-loop();
+tick();
+
+function frame() {
+  draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
 </script>
 </body>
 </html>
