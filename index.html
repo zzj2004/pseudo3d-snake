@@ -179,16 +179,20 @@ const FRUIT_STYLES = {
 const BASE_POOL = ['normal','normal','normal','normal','fast','slow','grow','shrink','reverse'];
 
 let layers = {};
-function ensureLayer(z) {
+function ensureLayer(z, avoid) {
   if (!layers[z]) {
-    layers[z] = {fruits: []};
-    for (let i = 0; i < 3; i++) layers[z].fruits.push(randomFruit(z));
+    layers[z] = {fruits: [], walls: []};
+    for (let i = 0; i < 3; i++) layers[z].fruits.push(randomFruit(z, avoid));
+    if (z >= 2) {
+      const count = 3 + Math.floor(Math.random() * 4);
+      for (let i = 0; i < count; i++) layers[z].walls.push(randomWall(z, avoid));
+    }
   }
 }
 function fruitPool(z) {
   return z >= 2 ? BASE_POOL.concat(['up', 'down']) : BASE_POOL;
 }
-function randomFruit(z) {
+function randomFruit(z, avoid) {
   const pool = fruitPool(z);
   const fruits = layers[z].fruits;
   let p;
@@ -198,8 +202,23 @@ function randomFruit(z) {
       y: Math.floor(Math.random() * ROWS)
     };
   } while (snake.some(s => s.z === z && s.x === p.x && s.y === p.y) ||
-           fruits.some(f => f.x === p.x && f.y === p.y));
+           fruits.some(f => f.x === p.x && f.y === p.y) ||
+           layers[z].walls.some(w => w.x === p.x && w.y === p.y) ||
+           (avoid && avoid.x === p.x && avoid.y === p.y));
   p.type = pool[Math.floor(Math.random() * pool.length)];
+  return p;
+}
+function randomWall(z, avoid) {
+  let p;
+  do {
+    p = {
+      x: Math.floor(Math.random() * COLS),
+      y: Math.floor(Math.random() * ROWS)
+    };
+  } while (layers[z].walls.some(w => w.x === p.x && w.y === p.y) ||
+           layers[z].fruits.some(f => f.x === p.x && f.y === p.y) ||
+           snake.some(s => s.z === z && s.x === p.x && s.y === p.y) ||
+           (avoid && avoid.x === p.x && avoid.y === p.y));
   return p;
 }
 ensureLayer(1);
@@ -207,7 +226,7 @@ ensureLayer(1);
 function climbIfColliding(head, body) {
   for (let i = 0; i < 10 && body.some(s => s.z === head.z && s.x === head.x && s.y === head.y); i++) {
     head.z += 1;
-    ensureLayer(head.z);
+    ensureLayer(head.z, head);
   }
 }
 
@@ -226,15 +245,22 @@ function step() {
 
   const eatsHere = layers[head.z].fruits.some(f => f.x === head.x && f.y === head.y);
   const body = eatsHere ? old : old.slice(0, -1);
+  const hitWall = layers[head.z].walls.some(w => w.x === head.x && w.y === head.y);
+  if (hitWall) {
+    head.z += 1;
+    ensureLayer(head.z, head);
+  }
   climbIfColliding(head, body);
-  if (head.z > old[0].z) showHint('climb', '撞到自己→爬上一层!');
+  if (head.z > old[0].z) {
+    showHint(hitWall ? 'wall' : 'climb', hitWall ? '撞到墙→爬上一层!' : '撞到自己→爬上一层!');
+  }
 
   const eaten = layers[head.z].fruits.find(f => f.x === head.x && f.y === head.y);
   if (eaten) {
     const eatenZ = head.z;
     if (eaten.type === 'up') {
       head.z += 1;
-      ensureLayer(head.z);
+      ensureLayer(head.z, head);
       climbIfColliding(head, old);
     } else if (eaten.type === 'down' && head.z > 1) {
       head.z -= 1;
@@ -291,6 +317,24 @@ function controlsReversed() {
   return Date.now() < reverseUntil;
 }
 
+function drawWall(x, y) {
+  const px = x * GRID;
+  const py = y * GRID;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(px, py, GRID, GRID);
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(px + 3, py + 3, GRID - 6, GRID - 6);
+  ctx.strokeStyle = '#bbb';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(px + 5, py + GRID - 5);
+  ctx.lineTo(px + GRID - 5, py + 5);
+  ctx.moveTo(px + 5, py + 5);
+  ctx.lineTo(px + GRID - 5, py + GRID - 5);
+  ctx.stroke();
+}
+
 function ensureAudio() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
@@ -344,6 +388,10 @@ function draw() {
     }
   }
   ctx.globalAlpha = 1;
+
+  for (const w of layers[z].walls) {
+    drawWall(w.x, w.y);
+  }
 
   const INSET = 3;
   const RADIUS = 5;
