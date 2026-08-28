@@ -45,6 +45,7 @@
     <button id="startBtn">开始</button>
     <button id="pauseBtn">暂停</button>
     <button id="restartBtn">重新开始</button>
+    <button id="soundBtn">音效:关</button>
     <label for="speed">速度:</label>
     <input type="range" id="speed" min="80" max="300" step="10" value="150">
     <span id="speedLabel">150ms</span>
@@ -79,6 +80,15 @@ restartBtn.addEventListener('click', () => {
   reset();
   started = true;
 });
+const soundBtn = document.getElementById('soundBtn');
+soundBtn.addEventListener('click', () => {
+  soundOn = !soundOn;
+  soundBtn.textContent = soundOn ? '音效:开' : '音效:关';
+  if (soundOn) {
+    ensureAudio();
+    playSound('eat', 'normal');
+  }
+});
 function togglePause() {
   paused = !paused;
   pauseBtn.textContent = paused ? '继续' : '暂停';
@@ -103,6 +113,13 @@ function showHint(key, text) {
   hintsShown[key] = true;
   showToast(text);
 }
+
+let soundOn = false;
+let audioCtx = null;
+const FRUIT_PITCH = {
+  normal: 440, fast: 587, slow: 349, grow: 494,
+  shrink: 330, reverse: 294, up: 659, down: 262
+};
 
 let snake = [{x: 10, y: 10, z: 1}];
 let dir = {x: 1, y: 0};
@@ -191,6 +208,7 @@ function step() {
   if (snake[0].z !== old[0].z) {
     layerChangeAt = Date.now();
     layerChangeDir = snake[0].z > old[0].z ? 1 : -1;
+    playSound(layerChangeDir > 0 ? 'climb' : 'descend');
   }
 }
 
@@ -198,7 +216,10 @@ function eat(f, z) {
   const prevScore = score;
   score++;
   if (Math.floor(score / 100) > Math.floor(prevScore / 100)) showToast(score + ' 分!');
-  if (score >= 999999999) cleared = true;
+  if (score >= 999999999) {
+    cleared = true;
+    playSound('clear');
+  }
   layers[z].fruits = layers[z].fruits.filter(x => x !== f);
   layers[z].fruits.push(randomFruit(z));
 
@@ -215,10 +236,51 @@ function eat(f, z) {
   if (f.type === 'grow') showHint('grow', '蛇身 +3');
   if (f.type === 'shrink') showHint('shrink', '蛇身 -2');
   if (f.type === 'reverse') { reverseUntil = Date.now() + 8000; showHint('reverse', '方向反转 8 秒!'); }
+  if (f.type === 'reverse') playSound('reverse');
+  else if (f.type !== 'up' && f.type !== 'down') playSound('eat', f.type);
 }
 
 function controlsReversed() {
   return Date.now() < reverseUntil;
+}
+
+function ensureAudio() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  if (!audioCtx) audioCtx = new AC();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+function tone(freq, delay, dur, type, vol, slideTo) {
+  const t0 = audioCtx.currentTime + delay;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+  gain.gain.setValueAtTime(vol, t0);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.05);
+}
+function playSound(name, type) {
+  if (!soundOn || !audioCtx) return;
+  if (name === 'eat') {
+    tone(FRUIT_PITCH[type] || 440, 0, 0.09, 'triangle', 0.12);
+  } else if (name === 'climb') {
+    tone(330, 0, 0.15, 'sine', 0.12, 660);
+  } else if (name === 'descend') {
+    tone(660, 0, 0.15, 'sine', 0.12, 330);
+  } else if (name === 'reverse') {
+    tone(420, 0, 0.09, 'square', 0.07);
+    tone(310, 0.11, 0.13, 'square', 0.07);
+  } else if (name === 'clear') {
+    tone(523, 0, 0.14, 'triangle', 0.12);
+    tone(659, 0.13, 0.14, 'triangle', 0.12);
+    tone(784, 0.26, 0.14, 'triangle', 0.12);
+    tone(1047, 0.39, 0.32, 'triangle', 0.12);
+  }
 }
 
 function draw() {
