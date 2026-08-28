@@ -29,12 +29,20 @@
     font-size: 14px;
     color: #000;
   }
+  .controls button {
+    padding: 4px 14px;
+    font-size: 14px;
+    border: 1px solid #000;
+    background: #fff;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <canvas id="game" width="400" height="400"></canvas>
   <div class="controls">
+    <button id="pauseBtn">暂停</button>
     <label for="speed">速度:</label>
     <input type="range" id="speed" min="80" max="300" step="10" value="150">
     <span id="speedLabel">150ms</span>
@@ -48,6 +56,14 @@ const speedLabel = document.getElementById('speedLabel');
 speedInput.addEventListener('input', () => {
   speedLabel.textContent = speedInput.value + 'ms';
 });
+const pauseBtn = document.getElementById('pauseBtn');
+pauseBtn.addEventListener('click', () => {
+  if (!over) togglePause();
+});
+function togglePause() {
+  paused = !paused;
+  pauseBtn.textContent = paused ? '继续' : '暂停';
+}
 const GRID = 20;
 const COLS = canvas.width / GRID;
 const ROWS = canvas.height / GRID;
@@ -74,10 +90,15 @@ function randomFood() {
 function step() {
   if (over || paused) return;
   dir = nextDir;
-  const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+  let hx = snake[0].x + dir.x;
+  let hy = snake[0].y + dir.y;
+  if (hx < 0) hx = COLS - 1;
+  if (hx >= COLS) hx = 0;
+  if (hy < 0) hy = ROWS - 1;
+  if (hy >= ROWS) hy = 0;
+  const head = {x: hx, y: hy};
 
-  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS ||
-      snake.some(s => s.x === head.x && s.y === head.y)) {
+  if (snake.some(s => s.x === head.x && s.y === head.y)) {
     over = true;
     return;
   }
@@ -152,6 +173,7 @@ function reset() {
   food = randomFood();
   over = false;
   paused = false;
+  pauseBtn.textContent = '暂停';
 }
 
 document.addEventListener('keydown', e => {
@@ -159,7 +181,7 @@ document.addEventListener('keydown', e => {
 
   if (e.code === 'Space') {
     e.preventDefault();
-    if (!over) paused = !paused;
+    if (!over) togglePause();
     return;
   }
 
