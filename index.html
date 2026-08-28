@@ -90,6 +90,8 @@ let cleared = false;
 let score = 0;
 let speedOffset = 0;
 let reverseUntil = 0;
+let layerChangeAt = 0;
+let layerChangeDir = 0;
 
 let snake = [{x: 10, y: 10, z: 1}];
 let dir = {x: 1, y: 0};
@@ -170,6 +172,11 @@ function step() {
     eat(eaten, eatenZ);
   } else {
     snake = [head, ...old.slice(0, -1)];
+  }
+
+  if (snake[0].z !== old[0].z) {
+    layerChangeAt = Date.now();
+    layerChangeDir = snake[0].z > old[0].z ? 1 : -1;
   }
 }
 
@@ -258,6 +265,18 @@ function draw() {
     const secs = Math.ceil((reverseUntil - Date.now()) / 1000);
     ctx.fillText('方向反转 ' + secs + 's', canvas.width - 10, 20);
     ctx.textAlign = 'left';
+  }
+
+  const t = Date.now() - layerChangeAt;
+  if (started && !paused && !cleared && t < 500) {
+    const k = 1 - t / 500;
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.45 * k).toFixed(3) + ')';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(0,0,0,' + k.toFixed(3) + ')';
+    ctx.font = 'bold 26px sans-serif';
+    ctx.textAlign = 'center';
+    const bounce = Math.round(-18 * Math.sin((1 - k) * Math.PI));
+    ctx.fillText((layerChangeDir > 0 ? '↑ 进入第 ' : '↓ 回到第 ') + z + ' 层', canvas.width / 2, canvas.height / 2 + bounce);
   }
 
   if (cleared) {
