@@ -92,6 +92,17 @@ let speedOffset = 0;
 let reverseUntil = 0;
 let layerChangeAt = 0;
 let layerChangeDir = 0;
+let toastMsg = null;
+const hintsShown = {};
+
+function showToast(text) {
+  toastMsg = {text: text, at: Date.now()};
+}
+function showHint(key, text) {
+  if (hintsShown[key]) return;
+  hintsShown[key] = true;
+  showToast(text);
+}
 
 let snake = [{x: 10, y: 10, z: 1}];
 let dir = {x: 1, y: 0};
@@ -148,14 +159,17 @@ function step() {
 
   const old = snake.map(s => ({x: s.x, y: s.y, z: s.z}));
   const head = {x: old[0].x + dir.x, y: old[0].y + dir.y, z: old[0].z};
-  if (head.x < 0) head.x = COLS - 1;
-  if (head.x >= COLS) head.x = 0;
-  if (head.y < 0) head.y = ROWS - 1;
-  if (head.y >= ROWS) head.y = 0;
+  let wrapped = false;
+  if (head.x < 0) { head.x = COLS - 1; wrapped = true; }
+  if (head.x >= COLS) { head.x = 0; wrapped = true; }
+  if (head.y < 0) { head.y = ROWS - 1; wrapped = true; }
+  if (head.y >= ROWS) { head.y = 0; wrapped = true; }
+  if (wrapped) showHint('wrap', '穿墙:从对侧出来,不会死');
 
   const eatsHere = layers[head.z].fruits.some(f => f.x === head.x && f.y === head.y);
   const body = eatsHere ? old : old.slice(0, -1);
   climbIfColliding(head, body);
+  if (head.z > old[0].z) showHint('climb', '撞到自己→爬上一层!');
 
   const eaten = layers[head.z].fruits.find(f => f.x === head.x && f.y === head.y);
   if (eaten) {
@@ -181,7 +195,9 @@ function step() {
 }
 
 function eat(f, z) {
+  const prevScore = score;
   score++;
+  if (Math.floor(score / 100) > Math.floor(prevScore / 100)) showToast(score + ' 分!');
   if (score >= 999999999) cleared = true;
   layers[z].fruits = layers[z].fruits.filter(x => x !== f);
   layers[z].fruits.push(randomFruit(z));
@@ -194,9 +210,11 @@ function eat(f, z) {
     for (let i = 0; i < -grow && snake.length > 2; i++) snake.pop();
   }
 
-  if (f.type === 'fast') speedOffset -= 30;
-  if (f.type === 'slow') speedOffset += 30;
-  if (f.type === 'reverse') reverseUntil = Date.now() + 8000;
+  if (f.type === 'fast') { speedOffset -= 30; showHint('fast', '变快了!'); }
+  if (f.type === 'slow') { speedOffset += 30; showHint('slow', '变慢了!'); }
+  if (f.type === 'grow') showHint('grow', '蛇身 +3');
+  if (f.type === 'shrink') showHint('shrink', '蛇身 -2');
+  if (f.type === 'reverse') { reverseUntil = Date.now() + 8000; showHint('reverse', '方向反转 8 秒!'); }
 }
 
 function controlsReversed() {
@@ -287,6 +305,20 @@ function draw() {
     ctx.textAlign = 'center';
     const bounce = Math.round(-18 * Math.sin((1 - k) * Math.PI));
     ctx.fillText((layerChangeDir > 0 ? '↑ 进入第 ' : '↓ 回到第 ') + z + ' 层', canvas.width / 2, canvas.height / 2 + bounce);
+  }
+
+  if (toastMsg) {
+    const age = Date.now() - toastMsg.at;
+    if (age < 1000) {
+      const k = Math.min(1, age / 150, (1000 - age) / 250);
+      ctx.globalAlpha = k;
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(toastMsg.text, canvas.width / 2, 44);
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'left';
+    }
   }
 
   if (cleared) {
