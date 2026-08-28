@@ -75,6 +75,20 @@ function draw() {
     ctx.fillRect(s.x * GRID, s.y * GRID, GRID, GRID);
   }
 
+  const h = snake[0];
+  const cx = h.x * GRID + GRID / 2;
+  const cy = h.y * GRID + GRID / 2;
+  const fx = cx + dir.x * 7;
+  const fy = cy + dir.y * 7;
+  const px = -dir.y * 4;
+  const py = dir.x * 4;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(fx + px - 2, fy + py - 2, 4, 4);
+  ctx.fillRect(fx - px - 2, fy - py - 2, 4, 4);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(fx + px - 1, fy + py - 1, 2, 2);
+  ctx.fillRect(fx - px - 1, fy - py - 1, 2, 2);
+
   ctx.fillStyle = '#f00';
   ctx.fillRect(food.x * GRID, food.y * GRID, GRID, GRID);
 
@@ -116,14 +130,16 @@ function reset() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === ' ') {
+  if (e.isComposing) return;
+
+  if (e.code === 'Space') {
     e.preventDefault();
     if (!over) paused = !paused;
     return;
   }
 
   if (over) {
-    if (e.key === 'Enter') reset();
+    if (e.code === 'Enter') reset();
     return;
   }
 
@@ -133,7 +149,7 @@ document.addEventListener('keydown', e => {
     ArrowLeft:  {x: -1, y: 0},
     ArrowRight: {x: 1, y: 0}
   };
-  const d = keyMap[e.key];
+  const d = keyMap[e.code];
   if (!d) return;
   e.preventDefault();
   if (d.x !== -dir.x || d.y !== -dir.y) nextDir = d;
