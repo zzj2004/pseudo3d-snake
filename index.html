@@ -121,7 +121,8 @@ function showHint(key, text) {
 const SAVE_KEY = 'snake3d_save';
 const FRUIT_DESC = {
   normal: '普通 +1 分', fast: '速度变快', slow: '速度变慢', grow: '蛇身 +3',
-  shrink: '蛇身 -2', reverse: '方向反转 8 秒', up: '升上一层', down: '降下一层'
+  shrink: '蛇身 -2', reverse: '方向反转 8 秒', up: '升上一层', down: '降下一层',
+  rainbow: '随机一种效果', gold: '+50 分不变长', teleport: '传送到本层空格'
 };
 function defaultSave() {
   return {v: 1, best: 0, sound: false, stats: {climbs: 0, descents: 0, fruits: {}}, book: {}};
@@ -159,7 +160,8 @@ soundBtn.textContent = soundOn ? '音效:开' : '音效:关';
 let audioCtx = null;
 const FRUIT_PITCH = {
   normal: 440, fast: 587, slow: 349, grow: 494,
-  shrink: 330, reverse: 294, up: 659, down: 262
+  shrink: 330, reverse: 294, up: 659, down: 262,
+  rainbow: 622, gold: 880, teleport: 220
 };
 
 let snake = [{x: 10, y: 10, z: 1}];
@@ -174,9 +176,13 @@ const FRUIT_STYLES = {
   shrink:  '#a0c',
   reverse: '#f80',
   up:      '#f0f',
-  down:    '#0cc'
+  down:    '#0cc',
+  rainbow: '#ff0',
+  gold:    '#fd0',
+  teleport:'#666'
 };
-const BASE_POOL = ['normal','normal','normal','normal','fast','slow','grow','shrink','reverse'];
+const BASE_POOL = ['normal','normal','normal','normal','fast','slow','grow','shrink','reverse','rainbow','gold','teleport'];
+const RAINBOW_POOL = ['normal','fast','slow','grow','shrink','reverse','up','down'];
 
 let layers = {};
 function ensureLayer(z, avoid) {
@@ -258,16 +264,17 @@ function step() {
   const eaten = layers[head.z].fruits.find(f => f.x === head.x && f.y === head.y);
   if (eaten) {
     const eatenZ = head.z;
-    if (eaten.type === 'up') {
+    const eff = eaten.type === 'rainbow' ? RAINBOW_POOL[Math.floor(Math.random() * RAINBOW_POOL.length)] : eaten.type;
+    if (eff === 'up') {
       head.z += 1;
       ensureLayer(head.z, head);
       climbIfColliding(head, old);
-    } else if (eaten.type === 'down' && head.z > 1) {
+    } else if (eff === 'down' && head.z > 1) {
       head.z -= 1;
       climbIfColliding(head, old);
     }
     snake = [head, ...old];
-    eat(eaten, eatenZ);
+    eat(eaten, eatenZ, eff);
   } else {
     snake = [head, ...old.slice(0, -1)];
   }
@@ -281,9 +288,14 @@ function step() {
   }
 }
 
-function eat(f, z) {
-  const prevScore = score;
+function eat(f, z, eff) {
+  if (eff === undefined) eff = f.type;
   score++;
+  const prevScore = score - (f.type === 'gold' ? 51 : 1);
+  if (f.type === 'gold') {
+    score += 50;
+    showToast('+50 分!');
+  }
   if (Math.floor(score / 100) > Math.floor(prevScore / 100)) showToast(score + ' 分!');
   if (score >= 999999999) {
     cleared = true;
@@ -296,7 +308,7 @@ function eat(f, z) {
   layers[z].fruits = layers[z].fruits.filter(x => x !== f);
   layers[z].fruits.push(randomFruit(z));
 
-  const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0, up: 0, down: 0}[f.type];
+  const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0, up: 0, down: 0, rainbow: 0, gold: 0, teleport: 0}[eff];
   if (grow > 0) {
     const tail = snake[snake.length - 1];
     for (let i = 0; i < grow; i++) snake.push({x: tail.x, y: tail.y, z: tail.z});
@@ -304,17 +316,50 @@ function eat(f, z) {
     for (let i = 0; i < -grow && snake.length > 2; i++) snake.pop();
   }
 
-  if (f.type === 'fast') { speedOffset -= 30; showHint('fast', '变快了!'); }
-  if (f.type === 'slow') { speedOffset += 30; showHint('slow', '变慢了!'); }
-  if (f.type === 'grow') showHint('grow', '蛇身 +3');
-  if (f.type === 'shrink') showHint('shrink', '蛇身 -2');
-  if (f.type === 'reverse') { reverseUntil = Date.now() + 8000; showHint('reverse', '方向反转 8 秒!'); }
-  if (f.type === 'reverse') playSound('reverse');
+  if (eff === 'fast') { speedOffset -= 30; showHint('fast', '变快了!'); }
+  if (eff === 'slow') { speedOffset += 30; showHint('slow', '变慢了!'); }
+  if (eff === 'grow') showHint('grow', '蛇身 +3');
+  if (eff === 'shrink') showHint('shrink', '蛇身 -2');
+  if (eff === 'reverse') { reverseUntil = Date.now() + 8000; showHint('reverse', '方向反转 8 秒!'); }
+  if (f.type === 'teleport') {
+    const z2 = snake[0].z;
+    let p;
+    do {
+      p = {x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS)};
+    } while (
+      snake.some(s => s.z === z2 && s.x === p.x && s.y === p.y) ||
+      layers[z2].fruits.some(q => q.x === p.x && q.y === p.y) ||
+      layers[z2].walls.some(w => w.x === p.x && w.y === p.y)
+    );
+    snake[0].x = p.x;
+    snake[0].y = p.y;
+    showToast('传送!');
+    playSound('teleport');
+  } else if (f.type === 'reverse') playSound('reverse');
   else if (f.type !== 'up' && f.type !== 'down') playSound('eat', f.type);
 }
 
 function controlsReversed() {
   return Date.now() < reverseUntil;
+}
+
+function fillFruitShape(type, px, py, size) {
+  if (type === 'rainbow') {
+    const g = ctx.createLinearGradient(px, py, px + size, py + size);
+    const t = Date.now() / 300;
+    for (let i = 0; i <= 5; i++) {
+      g.addColorStop(i / 5, 'hsl(' + Math.floor((t * 60 + i * 60) % 360) + ',85%,55%)');
+    }
+    ctx.fillStyle = g;
+  } else {
+    ctx.fillStyle = FRUIT_STYLES[type];
+  }
+  ctx.fillRect(px, py, size, size);
+  if (type === 'rainbow') {
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px + 0.5, py + 0.5, size - 1, size - 1);
+  }
 }
 
 function drawWall(x, y) {
@@ -366,6 +411,8 @@ function playSound(name, type) {
   } else if (name === 'reverse') {
     tone(420, 0, 0.09, 'square', 0.07);
     tone(310, 0.11, 0.13, 'square', 0.07);
+  } else if (name === 'teleport') {
+    tone(180, 0, 0.2, 'sine', 0.12, 720);
   } else if (name === 'clear') {
     tone(523, 0, 0.14, 'triangle', 0.12);
     tone(659, 0.13, 0.14, 'triangle', 0.12);
@@ -383,8 +430,7 @@ function draw() {
   for (const dz of [z - 1, z + 1]) {
     if (!layers[dz]) continue;
     for (const f of layers[dz].fruits) {
-      ctx.fillStyle = FRUIT_STYLES[f.type];
-      ctx.fillRect(f.x * GRID, f.y * GRID, GRID, GRID);
+      fillFruitShape(f.type, f.x * GRID, f.y * GRID, GRID);
     }
   }
   ctx.globalAlpha = 1;
@@ -434,8 +480,7 @@ function draw() {
   ctx.fillRect(fx - px - 1, fy - py - 1, 2, 2);
 
   for (const f of layers[z].fruits) {
-    ctx.fillStyle = FRUIT_STYLES[f.type];
-    ctx.fillRect(f.x * GRID, f.y * GRID, GRID, GRID);
+    fillFruitShape(f.type, f.x * GRID, f.y * GRID, GRID);
   }
 
   ctx.fillStyle = '#000';
@@ -517,8 +562,7 @@ function draw() {
       const t = types[i];
       const y = 144 + i * 24;
       ctx.globalAlpha = save.book[t] ? 1 : 0.35;
-      ctx.fillStyle = FRUIT_STYLES[t];
-      ctx.fillRect(72, y - 11, 14, 14);
+      fillFruitShape(t, 72, y - 11, 14);
       ctx.globalAlpha = 1;
       ctx.fillStyle = save.book[t] ? '#000' : '#999';
       const count = save.stats.fruits[t] || 0;
