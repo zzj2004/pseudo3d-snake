@@ -168,6 +168,27 @@ let snake = [{x: 10, y: 10, z: 1}];
 let dir = {x: 1, y: 0};
 let nextDir = dir;
 
+let demoSnake = [];
+let demoDir = {x: 1, y: 0};
+function resetDemo() {
+  demoSnake = [];
+  for (let i = 0; i < 7; i++) demoSnake.push({x: 8 - i, y: 5, z: 1});
+  demoDir = {x: 1, y: 0};
+}
+function demoStep() {
+  if (Math.random() < 0.35) {
+    const opts = [{x: 0, y: -1}, {x: 0, y: 1}, {x: -1, y: 0}, {x: 1, y: 0}].filter(d => d.x !== -demoDir.x || d.y !== -demoDir.y);
+    demoDir = opts[Math.floor(Math.random() * opts.length)];
+  }
+  const head = {x: demoSnake[0].x + demoDir.x, y: demoSnake[0].y + demoDir.y, z: 1};
+  if (head.x < 0) head.x = COLS - 1;
+  if (head.x >= COLS) head.x = 0;
+  if (head.y < 0) head.y = ROWS - 1;
+  if (head.y >= ROWS) head.y = 0;
+  demoSnake = [head, ...demoSnake.slice(0, -1)];
+}
+resetDemo();
+
 const FRUIT_STYLES = {
   normal:  '#f00',
   fast:    '#0a0',
@@ -537,6 +558,18 @@ function draw() {
   } else if (!started) {
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#000';
+    for (const s of demoSnake) {
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(s.x * GRID + INSET, s.y * GRID + INSET, GRID - INSET * 2, GRID - INSET * 2, RADIUS);
+      } else {
+        ctx.rect(s.x * GRID + INSET, s.y * GRID + INSET, GRID - INSET * 2, GRID - INSET * 2);
+      }
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
     ctx.fillStyle = '#000';
     ctx.font = 'bold 24px sans-serif';
     ctx.textAlign = 'center';
@@ -612,6 +645,7 @@ document.addEventListener('keydown', e => {
 });
 
 function tick() {
+  if (!started) demoStep();
   step();
   const speed = Math.max(50, Math.min(600, Number(speedInput.value) + speedOffset - score * 5));
   setTimeout(tick, speed);
