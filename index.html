@@ -74,16 +74,20 @@ startBtn.addEventListener('click', () => {
   if (!started || cleared) {
     reset();
     started = true;
+    if (soundOn) ensureAudio();
   }
 });
 restartBtn.addEventListener('click', () => {
   reset();
   started = true;
+  if (soundOn) ensureAudio();
 });
 const soundBtn = document.getElementById('soundBtn');
 soundBtn.addEventListener('click', () => {
   soundOn = !soundOn;
   soundBtn.textContent = soundOn ? '音效:开' : '音效:关';
+  save.sound = soundOn;
+  persist();
   if (soundOn) {
     ensureAudio();
     playSound('eat', 'normal');
@@ -114,7 +118,44 @@ function showHint(key, text) {
   showToast(text);
 }
 
-let soundOn = false;
+const SAVE_KEY = 'snake3d_save';
+const FRUIT_DESC = {
+  normal: '普通 +1 分', fast: '速度变快', slow: '速度变慢', grow: '蛇身 +3',
+  shrink: '蛇身 -2', reverse: '方向反转 8 秒', up: '升上一层', down: '降下一层'
+};
+function defaultSave() {
+  return {v: 1, best: 0, sound: false, stats: {climbs: 0, descents: 0, fruits: {}}, book: {}};
+}
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return defaultSave();
+    const s = JSON.parse(raw);
+    if (!s || s.v !== 1 || !s.stats) return defaultSave();
+    return {
+      v: 1,
+      best: Number(s.best) || 0,
+      sound: !!s.sound,
+      stats: {
+        climbs: Number(s.stats.climbs) || 0,
+        descents: Number(s.stats.descents) || 0,
+        fruits: (s.stats.fruits && typeof s.stats.fruits === 'object') ? s.stats.fruits : {}
+      },
+      book: (s.book && typeof s.book === 'object') ? s.book : {}
+    };
+  } catch (e) {
+    return defaultSave();
+  }
+}
+function persist() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+  } catch (e) {}
+}
+const save = loadSave();
+
+let soundOn = save.sound;
+soundBtn.textContent = soundOn ? '音效:开' : '音效:关';
 let audioCtx = null;
 const FRUIT_PITCH = {
   normal: 440, fast: 587, slow: 349, grow: 494,
@@ -209,6 +250,8 @@ function step() {
     layerChangeAt = Date.now();
     layerChangeDir = snake[0].z > old[0].z ? 1 : -1;
     playSound(layerChangeDir > 0 ? 'climb' : 'descend');
+    if (layerChangeDir > 0) save.stats.climbs++; else save.stats.descents++;
+    persist();
   }
 }
 
@@ -220,6 +263,10 @@ function eat(f, z) {
     cleared = true;
     playSound('clear');
   }
+  save.stats.fruits[f.type] = (save.stats.fruits[f.type] || 0) + 1;
+  save.book[f.type] = true;
+  if (score > save.best) save.best = score;
+  persist();
   layers[z].fruits = layers[z].fruits.filter(x => x !== f);
   layers[z].fruits.push(randomFruit(z));
 
@@ -392,7 +439,8 @@ function draw() {
     ctx.fillText('通关!', canvas.width / 2, canvas.height / 2 - 20);
     ctx.font = '16px sans-serif';
     ctx.fillText('得分: ' + score, canvas.width / 2, canvas.height / 2 + 10);
-    ctx.fillText('点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 40);
+    ctx.fillText('最高分: ' + save.best, canvas.width / 2, canvas.height / 2 + 32);
+    ctx.fillText('点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 54);
   } else if (!started) {
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -401,16 +449,35 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.fillText('贪吃蛇', canvas.width / 2, canvas.height / 2 - 10);
     ctx.font = '16px sans-serif';
-    ctx.fillText('点击开始按钮开始游戏', canvas.width / 2, canvas.height / 2 + 20);
+    ctx.fillText('最高分: ' + save.best, canvas.width / 2, canvas.height / 2 + 18);
+    ctx.fillText('点击开始按钮开始游戏', canvas.width / 2, canvas.height / 2 + 42);
   } else if (paused) {
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#000';
-    ctx.font = 'bold 24px sans-serif';
+    ctx.font = 'bold 22px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('暂停中', canvas.width / 2, canvas.height / 2);
-    ctx.font = '16px sans-serif';
-    ctx.fillText('按空格或点击暂停按钮继续', canvas.width / 2, canvas.height / 2 + 30);
+    ctx.fillText('暂停中', canvas.width / 2, 46);
+    ctx.font = '13px sans-serif';
+    ctx.fillText('按空格或点击暂停按钮继续', canvas.width / 2, 68);
+    ctx.fillText('最高分: ' + save.best + '   爬层: 升 ' + save.stats.climbs + ' / 降 ' + save.stats.descents, canvas.width / 2, 92);
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('果子图鉴(吃过点亮)', canvas.width / 2, 120);
+    ctx.font = '13px sans-serif';
+    const types = Object.keys(FRUIT_STYLES);
+    for (let i = 0; i < types.length; i++) {
+      const t = types[i];
+      const y = 144 + i * 24;
+      ctx.globalAlpha = save.book[t] ? 1 : 0.35;
+      ctx.fillStyle = FRUIT_STYLES[t];
+      ctx.fillRect(72, y - 11, 14, 14);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = save.book[t] ? '#000' : '#999';
+      const count = save.stats.fruits[t] || 0;
+      ctx.textAlign = 'left';
+      ctx.fillText(save.book[t] ? FRUIT_DESC[t] + ' ×' + count : '未尝出…', 96, y);
+    }
+    ctx.textAlign = 'left';
   }
 }
 
