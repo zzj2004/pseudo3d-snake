@@ -45,6 +45,7 @@
     <button id="startBtn">开始</button>
     <button id="pauseBtn">暂停</button>
     <button id="restartBtn">重新开始</button>
+    <button id="modeBtn">模式:无尽</button>
     <button id="soundBtn">音效:关</button>
     <label for="speed">速度:</label>
     <input type="range" id="speed" min="80" max="300" step="10" value="150">
@@ -68,10 +69,10 @@ const pauseBtn = document.getElementById('pauseBtn');
 const startBtn = document.getElementById('startBtn');
 const restartBtn = document.getElementById('restartBtn');
 pauseBtn.addEventListener('click', () => {
-  if (started && !cleared) togglePause();
+  if (started && !cleared && !settled) togglePause();
 });
 startBtn.addEventListener('click', () => {
-  if (!started || cleared) {
+  if (!started || cleared || settled) {
     reset();
     started = true;
     if (soundOn) ensureAudio();
@@ -96,12 +97,46 @@ soundBtn.addEventListener('click', () => {
 function togglePause() {
   paused = !paused;
   pauseBtn.textContent = paused ? '继续' : '暂停';
+  if (mode === 'timed') {
+    if (paused) timedPauseLeft = timedEndsAt - Date.now();
+    else timedEndsAt = Date.now() + timedPauseLeft;
+  }
 }
+
+const modeBtn = document.getElementById('modeBtn');
+const MODE_NAMES = {endless: '无尽', survival: '有命', timed: '限时'};
+const MODE_DESC = {
+  endless: '无尽模式:经典玩法,永不结束',
+  survival: '有命模式:3 条命,小心炸弹果',
+  timed: '限时模式:180 秒冲高分'
+};
+let mode = 'endless';
+function applyModeBtn() {
+  modeBtn.textContent = '模式:' + MODE_NAMES[mode];
+}
+applyModeBtn();
+modeBtn.addEventListener('click', () => {
+  if (started && !cleared && !settled) {
+    showToast('本局结束后可切换模式');
+    return;
+  }
+  const order = ['endless', 'survival', 'timed'];
+  mode = order[(order.indexOf(mode) + 1) % 3];
+  applyModeBtn();
+  reset();
+});
 
 let started = false;
 let paused = false;
 let cleared = false;
+let settled = false;
+let settleReason = '';
 let score = 0;
+let lives = 3;
+let invincibleUntil = 0;
+let timedEndsAt = 0;
+let timedPauseLeft = 0;
+let bestAtStart = 0;
 let fastUntil = 0;
 let slowUntil = 0;
 let reverseUntil = 0;
@@ -124,20 +159,32 @@ const FRUIT_DESC = {
   normal: '普通 +1 分', fast: '加速 6 秒', slow: '减速 6 秒', grow: '蛇身 +3',
   shrink: '蛇身 -2', reverse: '方向反转 8 秒', up: '升上一层', down: '降下一层',
   rainbow: '随机一种效果', gold: '+50 分不变长', teleport: '传送到本层空格',
-  clock: '重置速度效果'
+  clock: '重置速度效果', bomb: '炸弹 扣 1 命'
 };
 function defaultSave() {
-  return {v: 1, best: 0, sound: false, stats: {climbs: 0, descents: 0, fruits: {}}, book: {}};
+  return {v: 2, best: {endless: 0, survival: 0, timed: 0}, sound: false, stats: {climbs: 0, descents: 0, fruits: {}}, book: {}};
 }
 function loadSave() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return defaultSave();
     const s = JSON.parse(raw);
-    if (!s || s.v !== 1 || !s.stats) return defaultSave();
+    if (!s || !s.stats) return defaultSave();
+    let best;
+    if (s.v === 2 && s.best && typeof s.best === 'object') {
+      best = {
+        endless: Number(s.best.endless) || 0,
+        survival: Number(s.best.survival) || 0,
+        timed: Number(s.best.timed) || 0
+      };
+    } else if (s.v === 1) {
+      best = {endless: Number(s.best) || 0, survival: 0, timed: 0};
+    } else {
+      return defaultSave();
+    }
     return {
-      v: 1,
-      best: Number(s.best) || 0,
+      v: 2,
+      best: best,
       sound: !!s.sound,
       stats: {
         climbs: Number(s.stats.climbs) || 0,
@@ -163,7 +210,7 @@ let audioCtx = null;
 const FRUIT_PITCH = {
   normal: 440, fast: 587, slow: 349, grow: 494,
   shrink: 330, reverse: 294, up: 659, down: 262,
-  rainbow: 622, gold: 880, teleport: 220, clock: 392
+  rainbow: 622, gold: 880, teleport: 220, clock: 392, bomb: 110
 };
 
 let snake = [{x: 10, y: 10, z: 1}];
@@ -203,7 +250,8 @@ const FRUIT_STYLES = {
   rainbow: '#ff0',
   gold:    '#fd0',
   teleport:'#666',
-  clock:   '#fff'
+  clock:   '#fff',
+  bomb:    '#a00'
 };
 const BASE_POOL = ['normal','normal','normal','normal','fast','slow','grow','shrink','reverse','rainbow','gold','teleport','clock'];
 const RAINBOW_POOL = ['normal','fast','slow','grow','shrink','reverse','up','down'];
@@ -220,7 +268,9 @@ function ensureLayer(z, avoid) {
   }
 }
 function fruitPool(z) {
-  return z >= 2 ? BASE_POOL.concat(['up', 'down']) : BASE_POOL;
+  const pool = z >= 2 ? BASE_POOL.concat(['up', 'down']) : BASE_POOL.slice();
+  if (mode === 'survival') pool.push('bomb');
+  return pool;
 }
 function randomFruit(z, avoid) {
   const pool = fruitPool(z);
@@ -261,7 +311,11 @@ function climbIfColliding(head, body) {
 }
 
 function step() {
-  if (!started || paused || cleared) return;
+  if (!started || paused || cleared || settled) return;
+  if (mode === 'timed' && Date.now() >= timedEndsAt) {
+    settle('timeup');
+    return;
+  }
   dir = nextDir;
 
   const old = snake.map(s => ({x: s.x, y: s.y, z: s.z}));
@@ -321,18 +375,18 @@ function eat(f, z, eff) {
     showToast('+50 分!');
   }
   if (Math.floor(score / 100) > Math.floor(prevScore / 100)) showToast(score + ' 分!');
-  if (score >= 999999999) {
+  if (score >= 999999999 && mode === 'endless') {
     cleared = true;
     playSound('clear');
   }
   save.stats.fruits[f.type] = (save.stats.fruits[f.type] || 0) + 1;
   save.book[f.type] = true;
-  if (score > save.best) save.best = score;
+  if (score > save.best[mode]) save.best[mode] = score;
   persist();
   layers[z].fruits = layers[z].fruits.filter(x => x !== f);
   layers[z].fruits.push(randomFruit(z));
 
-  const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0, up: 0, down: 0, rainbow: 0, gold: 0, teleport: 0, clock: 0}[eff];
+  const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0, up: 0, down: 0, rainbow: 0, gold: 0, teleport: 0, clock: 0, bomb: 0}[eff];
   if (grow > 0) {
     const tail = snake[snake.length - 1];
     for (let i = 0; i < grow; i++) snake.push({x: tail.x, y: tail.y, z: tail.z});
@@ -360,8 +414,28 @@ function eat(f, z, eff) {
     snake[0].y = p.y;
     showToast('传送!');
     playSound('teleport');
+  } else if (f.type === 'bomb') {
+    if (Date.now() < invincibleUntil) {
+      showToast('无敌中,炸弹无效!');
+    } else {
+      lives--;
+      if (lives <= 0) {
+        settle('dead');
+      } else {
+        invincibleUntil = Date.now() + 2000;
+        showToast('扣 1 命!剩 ' + lives + ' 命');
+      }
+    }
+    playSound('bomb');
   } else if (f.type === 'reverse') playSound('reverse');
   else if (f.type !== 'up' && f.type !== 'down') playSound('eat', f.type);
+}
+
+function settle(reason) {
+  settled = true;
+  settleReason = reason;
+  playSound('settle');
+  persist();
 }
 
 function controlsReversed() {
@@ -380,7 +454,11 @@ function fillFruitShape(type, px, py, size) {
     ctx.fillStyle = FRUIT_STYLES[type];
   }
   ctx.fillRect(px, py, size, size);
-  if (type === 'rainbow' || type === 'clock') {
+  if (type === 'bomb') {
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 1, py + 1, size - 2, size - 2);
+  } else if (type === 'rainbow' || type === 'clock') {
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1;
     ctx.strokeRect(px + 0.5, py + 0.5, size - 1, size - 1);
@@ -438,6 +516,12 @@ function playSound(name, type) {
     tone(310, 0.11, 0.13, 'square', 0.07);
   } else if (name === 'teleport') {
     tone(180, 0, 0.2, 'sine', 0.12, 720);
+  } else if (name === 'bomb') {
+    tone(150, 0, 0.22, 'square', 0.1, 55);
+  } else if (name === 'settle') {
+    tone(659, 0, 0.16, 'triangle', 0.12);
+    tone(523, 0.15, 0.16, 'triangle', 0.12);
+    tone(392, 0.3, 0.3, 'triangle', 0.12);
   } else if (name === 'clear') {
     tone(523, 0, 0.14, 'triangle', 0.12);
     tone(659, 0.13, 0.14, 'triangle', 0.12);
@@ -468,6 +552,8 @@ function draw() {
   const RADIUS = 5;
   const onLayer = snake.filter(s => s.z === z);
 
+  const blink = Date.now() < invincibleUntil && Math.floor(Date.now() / 120) % 2 === 0;
+  ctx.globalAlpha = blink ? 0.25 : 1;
   ctx.fillStyle = '#000';
   for (let i = 0; i + 1 < onLayer.length; i++) {
     const a = onLayer[i], b = onLayer[i + 1];
@@ -497,12 +583,14 @@ function draw() {
   const fy = cy + dir.y * 7;
   const px = -dir.y * 4;
   const py = dir.x * 4;
+  ctx.globalAlpha = blink ? 0.25 : 1;
   ctx.fillStyle = '#fff';
   ctx.fillRect(fx + px - 2, fy + py - 2, 4, 4);
   ctx.fillRect(fx - px - 2, fy - py - 2, 4, 4);
   ctx.fillStyle = '#000';
   ctx.fillRect(fx + px - 1, fy + py - 1, 2, 2);
   ctx.fillRect(fx - px - 1, fy - py - 1, 2, 2);
+  ctx.globalAlpha = 1;
 
   for (const f of layers[z].fruits) {
     fillFruitShape(f.type, f.x * GRID, f.y * GRID, GRID);
@@ -512,6 +600,23 @@ function draw() {
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'left';
   ctx.fillText('得分: ' + score + '  第' + z + '层', 10, 20);
+
+  if (mode === 'timed' && started && !settled) {
+    const left = Math.max(0, timedEndsAt - Date.now());
+    const mm = Math.floor(left / 60000);
+    const ss = Math.floor(left % 60000 / 1000);
+    ctx.fillStyle = left <= 10000 ? '#d00' : '#000';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('剩余 ' + mm + ':' + (ss < 10 ? '0' : '') + ss, canvas.width / 2, 20);
+  }
+  if (mode === 'survival' && started && !settled) {
+    ctx.fillStyle = Date.now() < invincibleUntil ? '#a00' : '#000';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('命 ×' + lives, canvas.width / 2, 20);
+  }
+  ctx.textAlign = 'left';
 
   const now = Date.now();
   if (now < fastUntil) {
@@ -559,7 +664,18 @@ function draw() {
     }
   }
 
-  if (cleared) {
+  if (settled) {
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(settleReason === 'dead' ? '命用完了!' : '时间到!', canvas.width / 2, canvas.height / 2 - 40);
+    ctx.font = '16px sans-serif';
+    ctx.fillText(MODE_NAMES[mode] + '模式  得分: ' + score, canvas.width / 2, canvas.height / 2 - 8);
+    ctx.fillText(score > bestAtStart ? '新纪录!' : '最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 18);
+    ctx.fillText('点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 46);
+  } else if (cleared) {
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#000';
@@ -568,7 +684,7 @@ function draw() {
     ctx.fillText('通关!', canvas.width / 2, canvas.height / 2 - 20);
     ctx.font = '16px sans-serif';
     ctx.fillText('得分: ' + score, canvas.width / 2, canvas.height / 2 + 10);
-    ctx.fillText('最高分: ' + save.best, canvas.width / 2, canvas.height / 2 + 32);
+    ctx.fillText('最高分: ' + save.best.endless, canvas.width / 2, canvas.height / 2 + 32);
     ctx.fillText('点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 54);
   } else if (!started) {
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
@@ -588,10 +704,11 @@ function draw() {
     ctx.fillStyle = '#000';
     ctx.font = 'bold 24px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('贪吃蛇', canvas.width / 2, canvas.height / 2 - 10);
+    ctx.fillText('贪吃蛇', canvas.width / 2, canvas.height / 2 - 34);
     ctx.font = '16px sans-serif';
-    ctx.fillText('最高分: ' + save.best, canvas.width / 2, canvas.height / 2 + 18);
-    ctx.fillText('点击开始按钮开始游戏', canvas.width / 2, canvas.height / 2 + 42);
+    ctx.fillText(MODE_DESC[mode], canvas.width / 2, canvas.height / 2 - 4);
+    ctx.fillText('最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 20);
+    ctx.fillText('点击开始按钮开始游戏', canvas.width / 2, canvas.height / 2 + 44);
   } else if (paused) {
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -601,7 +718,7 @@ function draw() {
     ctx.fillText('暂停中', canvas.width / 2, 46);
     ctx.font = '13px sans-serif';
     ctx.fillText('按空格或点击暂停按钮继续', canvas.width / 2, 68);
-    ctx.fillText('最高分: ' + save.best + '   爬层: 升 ' + save.stats.climbs + ' / 降 ' + save.stats.descents, canvas.width / 2, 92);
+    ctx.fillText(MODE_NAMES[mode] + '模式最高分: ' + save.best[mode] + '   爬层: 升 ' + save.stats.climbs + ' / 降 ' + save.stats.descents, canvas.width / 2, 92);
     ctx.font = 'bold 15px sans-serif';
     ctx.fillText('果子图鉴(吃过点亮)', canvas.width / 2, 120);
     ctx.font = '13px sans-serif';
@@ -626,6 +743,13 @@ function reset() {
   dir = {x: 1, y: 0};
   nextDir = dir;
   score = 0;
+  lives = 3;
+  invincibleUntil = 0;
+  settled = false;
+  settleReason = '';
+  bestAtStart = save.best[mode] || 0;
+  timedEndsAt = mode === 'timed' ? Date.now() + 180000 : 0;
+  timedPauseLeft = 0;
   fastUntil = 0;
   slowUntil = 0;
   reverseUntil = 0;
@@ -641,11 +765,11 @@ document.addEventListener('keydown', e => {
 
   if (e.code === 'Space') {
     e.preventDefault();
-    if (started && !cleared) togglePause();
+    if (started && !cleared && !settled) togglePause();
     return;
   }
 
-  if (!started || cleared) return;
+  if (!started || cleared || settled) return;
 
   const keyMap = {
     ArrowUp:    {x: 0, y: -1},
