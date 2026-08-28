@@ -67,10 +67,10 @@ const pauseBtn = document.getElementById('pauseBtn');
 const startBtn = document.getElementById('startBtn');
 const restartBtn = document.getElementById('restartBtn');
 pauseBtn.addEventListener('click', () => {
-  if (started) togglePause();
+  if (started && !cleared) togglePause();
 });
 startBtn.addEventListener('click', () => {
-  if (!started) {
+  if (!started || cleared) {
     reset();
     started = true;
   }
@@ -86,6 +86,7 @@ function togglePause() {
 
 let started = false;
 let paused = false;
+let cleared = false;
 let score = 0;
 let speedOffset = 0;
 let reverseUntil = 0;
@@ -140,7 +141,7 @@ function climbIfColliding(head, body) {
 }
 
 function step() {
-  if (!started || paused) return;
+  if (!started || paused || cleared) return;
   dir = nextDir;
 
   const old = snake.map(s => ({x: s.x, y: s.y, z: s.z}));
@@ -174,6 +175,7 @@ function step() {
 
 function eat(f, z) {
   score++;
+  if (score >= 999999999) cleared = true;
   layers[z].fruits = layers[z].fruits.filter(x => x !== f);
   layers[z].fruits.push(randomFruit(z));
 
@@ -238,7 +240,17 @@ function draw() {
     ctx.textAlign = 'left';
   }
 
-  if (!started) {
+  if (cleared) {
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('通关!', canvas.width / 2, canvas.height / 2 - 20);
+    ctx.font = '16px sans-serif';
+    ctx.fillText('得分: ' + score, canvas.width / 2, canvas.height / 2 + 10);
+    ctx.fillText('点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 40);
+  } else if (!started) {
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#000';
@@ -269,6 +281,7 @@ function reset() {
   layers = {};
   ensureLayer(1);
   paused = false;
+  cleared = false;
   pauseBtn.textContent = '暂停';
 }
 
@@ -277,11 +290,11 @@ document.addEventListener('keydown', e => {
 
   if (e.code === 'Space') {
     e.preventDefault();
-    if (started) togglePause();
+    if (started && !cleared) togglePause();
     return;
   }
 
-  if (!started) return;
+  if (!started || cleared) return;
 
   const keyMap = {
     ArrowUp:    {x: 0, y: -1},
