@@ -102,7 +102,8 @@ let started = false;
 let paused = false;
 let cleared = false;
 let score = 0;
-let speedOffset = 0;
+let fastUntil = 0;
+let slowUntil = 0;
 let reverseUntil = 0;
 let layerChangeAt = 0;
 let layerChangeDir = 0;
@@ -120,9 +121,10 @@ function showHint(key, text) {
 
 const SAVE_KEY = 'snake3d_save';
 const FRUIT_DESC = {
-  normal: '普通 +1 分', fast: '速度变快', slow: '速度变慢', grow: '蛇身 +3',
+  normal: '普通 +1 分', fast: '加速 6 秒', slow: '减速 6 秒', grow: '蛇身 +3',
   shrink: '蛇身 -2', reverse: '方向反转 8 秒', up: '升上一层', down: '降下一层',
-  rainbow: '随机一种效果', gold: '+50 分不变长', teleport: '传送到本层空格'
+  rainbow: '随机一种效果', gold: '+50 分不变长', teleport: '传送到本层空格',
+  clock: '重置速度效果'
 };
 function defaultSave() {
   return {v: 1, best: 0, sound: false, stats: {climbs: 0, descents: 0, fruits: {}}, book: {}};
@@ -161,7 +163,7 @@ let audioCtx = null;
 const FRUIT_PITCH = {
   normal: 440, fast: 587, slow: 349, grow: 494,
   shrink: 330, reverse: 294, up: 659, down: 262,
-  rainbow: 622, gold: 880, teleport: 220
+  rainbow: 622, gold: 880, teleport: 220, clock: 392
 };
 
 let snake = [{x: 10, y: 10, z: 1}];
@@ -200,9 +202,10 @@ const FRUIT_STYLES = {
   down:    '#0cc',
   rainbow: '#ff0',
   gold:    '#fd0',
-  teleport:'#666'
+  teleport:'#666',
+  clock:   '#fff'
 };
-const BASE_POOL = ['normal','normal','normal','normal','fast','slow','grow','shrink','reverse','rainbow','gold','teleport'];
+const BASE_POOL = ['normal','normal','normal','normal','fast','slow','grow','shrink','reverse','rainbow','gold','teleport','clock'];
 const RAINBOW_POOL = ['normal','fast','slow','grow','shrink','reverse','up','down'];
 
 let layers = {};
@@ -329,7 +332,7 @@ function eat(f, z, eff) {
   layers[z].fruits = layers[z].fruits.filter(x => x !== f);
   layers[z].fruits.push(randomFruit(z));
 
-  const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0, up: 0, down: 0, rainbow: 0, gold: 0, teleport: 0}[eff];
+  const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0, up: 0, down: 0, rainbow: 0, gold: 0, teleport: 0, clock: 0}[eff];
   if (grow > 0) {
     const tail = snake[snake.length - 1];
     for (let i = 0; i < grow; i++) snake.push({x: tail.x, y: tail.y, z: tail.z});
@@ -337,8 +340,9 @@ function eat(f, z, eff) {
     for (let i = 0; i < -grow && snake.length > 2; i++) snake.pop();
   }
 
-  if (eff === 'fast') { speedOffset -= 30; showHint('fast', '变快了!'); }
-  if (eff === 'slow') { speedOffset += 30; showHint('slow', '变慢了!'); }
+  if (eff === 'fast') { fastUntil = Date.now() + 6000; slowUntil = 0; showHint('fast', '加速 6 秒!'); }
+  if (eff === 'slow') { slowUntil = Date.now() + 6000; fastUntil = 0; showHint('slow', '减速 6 秒!'); }
+  if (eff === 'clock') { fastUntil = 0; slowUntil = 0; showHint('clock', '速度效果已重置!'); }
   if (eff === 'grow') showHint('grow', '蛇身 +3');
   if (eff === 'shrink') showHint('shrink', '蛇身 -2');
   if (eff === 'reverse') { reverseUntil = Date.now() + 8000; showHint('reverse', '方向反转 8 秒!'); }
@@ -376,7 +380,7 @@ function fillFruitShape(type, px, py, size) {
     ctx.fillStyle = FRUIT_STYLES[type];
   }
   ctx.fillRect(px, py, size, size);
-  if (type === 'rainbow') {
+  if (type === 'rainbow' || type === 'clock') {
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1;
     ctx.strokeRect(px + 0.5, py + 0.5, size - 1, size - 1);
@@ -509,6 +513,17 @@ function draw() {
   ctx.textAlign = 'left';
   ctx.fillText('得分: ' + score + '  第' + z + '层', 10, 20);
 
+  const now = Date.now();
+  if (now < fastUntil) {
+    ctx.fillStyle = '#0a0';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('加速 ' + Math.ceil((fastUntil - now) / 1000) + 's', 10, 40);
+  } else if (now < slowUntil) {
+    ctx.fillStyle = '#06c';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('减速 ' + Math.ceil((slowUntil - now) / 1000) + 's', 10, 40);
+  }
+
   if (controlsReversed()) {
     ctx.fillStyle = '#f80';
     ctx.font = 'bold 14px sans-serif';
@@ -611,7 +626,8 @@ function reset() {
   dir = {x: 1, y: 0};
   nextDir = dir;
   score = 0;
-  speedOffset = 0;
+  fastUntil = 0;
+  slowUntil = 0;
   reverseUntil = 0;
   layers = {};
   ensureLayer(1);
@@ -647,7 +663,10 @@ document.addEventListener('keydown', e => {
 function tick() {
   if (!started) demoStep();
   step();
-  const speed = Math.max(50, Math.min(600, Number(speedInput.value) + speedOffset - score * 5));
+  let speed = Number(speedInput.value) - Math.min(100, score * 5);
+  if (Date.now() < fastUntil) speed -= 60;
+  if (Date.now() < slowUntil) speed += 60;
+  speed = Math.max(50, Math.min(600, speed));
   setTimeout(tick, speed);
 }
 tick();
