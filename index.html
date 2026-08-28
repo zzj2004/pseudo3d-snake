@@ -208,6 +208,16 @@ function draw() {
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  ctx.globalAlpha = 0.15;
+  for (const dz of [z - 1, z + 1]) {
+    if (!layers[dz]) continue;
+    for (const f of layers[dz].fruits) {
+      ctx.fillStyle = FRUIT_STYLES[f.type];
+      ctx.fillRect(f.x * GRID, f.y * GRID, GRID, GRID);
+    }
+  }
+  ctx.globalAlpha = 1;
+
   const INSET = 3;
   const RADIUS = 5;
   const onLayer = snake.filter(s => s.z === z);
