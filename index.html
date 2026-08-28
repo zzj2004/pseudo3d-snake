@@ -53,19 +53,24 @@
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+const GRID = 20;
+const COLS = canvas.width / GRID;
+const ROWS = canvas.height / GRID;
+
 const speedInput = document.getElementById('speed');
 const speedLabel = document.getElementById('speedLabel');
 speedInput.addEventListener('input', () => {
   speedLabel.textContent = speedInput.value + 'ms';
 });
+
 const pauseBtn = document.getElementById('pauseBtn');
 const startBtn = document.getElementById('startBtn');
 const restartBtn = document.getElementById('restartBtn');
 pauseBtn.addEventListener('click', () => {
-  if (started && !over) togglePause();
+  if (started) togglePause();
 });
 startBtn.addEventListener('click', () => {
-  if (!started || over) {
+  if (!started) {
     reset();
     started = true;
   }
@@ -78,80 +83,104 @@ function togglePause() {
   paused = !paused;
   pauseBtn.textContent = paused ? '继续' : '暂停';
 }
-const GRID = 20;
-const COLS = canvas.width / GRID;
-const ROWS = canvas.height / GRID;
 
-let snake = [{x: 10, y: 10}];
-let dir = {x: 1, y: 0};
-let nextDir = dir;
-let over = false;
-let paused = false;
 let started = false;
+let paused = false;
 let score = 0;
 let speedOffset = 0;
 let reverseUntil = 0;
 
-const FRUIT_STYLES = {
-  normal:  {color: '#f00', text: ''},
-  fast:    {color: '#0a0', text: '快'},
-  slow:    {color: '#06c', text: '慢'},
-  grow:    {color: '#c90', text: '长'},
-  shrink:  {color: '#a0c', text: '短'},
-  reverse: {color: '#f80', text: '反'}
-};
-const FRUIT_POOL = ['normal','normal','normal','normal','fast','slow','grow','shrink','reverse'];
-let fruits = [];
-for (let i = 0; i < 3; i++) fruits.push(randomFruit());
+let snake = [{x: 10, y: 10, z: 1}];
+let dir = {x: 1, y: 0};
+let nextDir = dir;
 
-function randomFruit() {
+const FRUIT_STYLES = {
+  normal:  '#f00',
+  fast:    '#0a0',
+  slow:    '#06c',
+  grow:    '#c90',
+  shrink:  '#a0c',
+  reverse: '#f80',
+  up:      '#f0f',
+  down:    '#0cc'
+};
+const BASE_POOL = ['normal','normal','normal','normal','fast','slow','grow','shrink','reverse'];
+
+let layers = {};
+function ensureLayer(z) {
+  if (!layers[z]) {
+    layers[z] = {fruits: []};
+    for (let i = 0; i < 3; i++) layers[z].fruits.push(randomFruit(z));
+  }
+}
+function fruitPool(z) {
+  return z >= 2 ? BASE_POOL.concat(['up', 'down']) : BASE_POOL;
+}
+function randomFruit(z) {
+  const pool = fruitPool(z);
+  const fruits = layers[z].fruits;
   let p;
   do {
     p = {
       x: Math.floor(Math.random() * COLS),
       y: Math.floor(Math.random() * ROWS)
     };
-  } while (snake.some(s => s.x === p.x && s.y === p.y) ||
+  } while (snake.some(s => s.z === z && s.x === p.x && s.y === p.y) ||
            fruits.some(f => f.x === p.x && f.y === p.y));
-  p.type = FRUIT_POOL[Math.floor(Math.random() * FRUIT_POOL.length)];
+  p.type = pool[Math.floor(Math.random() * pool.length)];
   return p;
+}
+ensureLayer(1);
+
+function climbIfColliding(head, body) {
+  for (let i = 0; i < 10 && body.some(s => s.z === head.z && s.x === head.x && s.y === head.y); i++) {
+    head.z += 1;
+    ensureLayer(head.z);
+  }
 }
 
 function step() {
-  if (over || paused || !started) return;
+  if (!started || paused) return;
   dir = nextDir;
-  let hx = snake[0].x + dir.x;
-  let hy = snake[0].y + dir.y;
-  if (hx < 0) hx = COLS - 1;
-  if (hx >= COLS) hx = 0;
-  if (hy < 0) hy = ROWS - 1;
-  if (hy >= ROWS) hy = 0;
-  const head = {x: hx, y: hy};
 
-  const eaten = fruits.find(f => f.x === head.x && f.y === head.y);
-  const body = eaten ? snake : snake.slice(0, -1);
-  if (body.some(s => s.x === head.x && s.y === head.y)) {
-    over = true;
-    return;
-  }
+  const old = snake.map(s => ({x: s.x, y: s.y, z: s.z}));
+  const head = {x: old[0].x + dir.x, y: old[0].y + dir.y, z: old[0].z};
+  if (head.x < 0) head.x = COLS - 1;
+  if (head.x >= COLS) head.x = 0;
+  if (head.y < 0) head.y = ROWS - 1;
+  if (head.y >= ROWS) head.y = 0;
 
-  snake.unshift(head);
+  const eatsHere = layers[head.z].fruits.some(f => f.x === head.x && f.y === head.y);
+  const body = eatsHere ? old : old.slice(0, -1);
+  climbIfColliding(head, body);
+
+  const eaten = layers[head.z].fruits.find(f => f.x === head.x && f.y === head.y);
   if (eaten) {
-    eat(eaten);
+    const eatenZ = head.z;
+    if (eaten.type === 'up') {
+      head.z += 1;
+      ensureLayer(head.z);
+      climbIfColliding(head, old);
+    } else if (eaten.type === 'down' && head.z > 1) {
+      head.z -= 1;
+      climbIfColliding(head, old);
+    }
+    snake = [head, ...old];
+    eat(eaten, eatenZ);
   } else {
-    snake.pop();
+    snake = [head, ...old.slice(0, -1)];
   }
 }
 
-function eat(f) {
+function eat(f, z) {
   score++;
-  fruits = fruits.filter(x => x !== f);
-  fruits.push(randomFruit());
+  layers[z].fruits = layers[z].fruits.filter(x => x !== f);
+  layers[z].fruits.push(randomFruit(z));
 
-  const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0}[f.type];
+  const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0, up: 0, down: 0}[f.type];
   if (grow > 0) {
     const tail = snake[snake.length - 1];
-    for (let i = 0; i < grow; i++) snake.push({x: tail.x, y: tail.y});
+    for (let i = 0; i < grow; i++) snake.push({x: tail.x, y: tail.y, z: tail.z});
   } else {
     for (let i = 0; i < -grow && snake.length > 2; i++) snake.pop();
   }
@@ -166,11 +195,13 @@ function controlsReversed() {
 }
 
 function draw() {
+  const z = snake[0].z;
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.fillStyle = '#000';
   for (const s of snake) {
+    if (s.z !== z) continue;
     ctx.fillRect(s.x * GRID, s.y * GRID, GRID, GRID);
   }
 
@@ -188,25 +219,15 @@ function draw() {
   ctx.fillRect(fx + px - 1, fy + py - 1, 2, 2);
   ctx.fillRect(fx - px - 1, fy - py - 1, 2, 2);
 
-  for (const f of fruits) {
-    const st = FRUIT_STYLES[f.type];
-    ctx.fillStyle = st.color;
+  for (const f of layers[z].fruits) {
+    ctx.fillStyle = FRUIT_STYLES[f.type];
     ctx.fillRect(f.x * GRID, f.y * GRID, GRID, GRID);
-    if (st.text) {
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 13px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(st.text, f.x * GRID + GRID / 2, f.y * GRID + GRID / 2 + 1);
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
-    }
   }
 
   ctx.fillStyle = '#000';
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText('得分: ' + score, 10, 20);
+  ctx.fillText('得分: ' + score + '  第' + z + '层', 10, 20);
 
   if (controlsReversed()) {
     ctx.fillStyle = '#f80';
@@ -217,17 +238,7 @@ function draw() {
     ctx.textAlign = 'left';
   }
 
-  if (over) {
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#000';
-    ctx.font = 'bold 24px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('游戏结束', canvas.width / 2, canvas.height / 2 - 10);
-    ctx.font = '16px sans-serif';
-    ctx.fillText('得分: ' + score, canvas.width / 2, canvas.height / 2 + 20);
-    ctx.fillText('点击任意位置重新开始', canvas.width / 2, canvas.height / 2 + 45);
-  } else if (!started) {
+  if (!started) {
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#000';
@@ -249,15 +260,14 @@ function draw() {
 }
 
 function reset() {
-  snake = [{x: 10, y: 10}];
+  snake = [{x: 10, y: 10, z: 1}];
   dir = {x: 1, y: 0};
   nextDir = dir;
   score = 0;
   speedOffset = 0;
   reverseUntil = 0;
-  fruits = [];
-  for (let i = 0; i < 3; i++) fruits.push(randomFruit());
-  over = false;
+  layers = {};
+  ensureLayer(1);
   paused = false;
   pauseBtn.textContent = '暂停';
 }
@@ -267,11 +277,11 @@ document.addEventListener('keydown', e => {
 
   if (e.code === 'Space') {
     e.preventDefault();
-    if (started && !over) togglePause();
+    if (started) togglePause();
     return;
   }
 
-  if (over || !started) return;
+  if (!started) return;
 
   const keyMap = {
     ArrowUp:    {x: 0, y: -1},
@@ -284,13 +294,6 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
   if (controlsReversed()) d = {x: -d.x, y: -d.y};
   if (d.x !== -dir.x || d.y !== -dir.y) nextDir = d;
-});
-
-document.addEventListener('click', () => {
-  if (over) {
-    reset();
-    started = true;
-  }
 });
 
 function loop() {
