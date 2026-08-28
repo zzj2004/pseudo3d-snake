@@ -139,6 +139,8 @@ let timedPauseLeft = 0;
 let bestAtStart = 0;
 let fastUntil = 0;
 let slowUntil = 0;
+let doubleUntil = 0;
+let ghostUntil = 0;
 let reverseUntil = 0;
 let layerChangeAt = 0;
 let layerChangeDir = 0;
@@ -159,7 +161,8 @@ const FRUIT_DESC = {
   normal: '普通 +1 分', fast: '加速 6 秒', slow: '减速 6 秒', grow: '蛇身 +3',
   shrink: '蛇身 -2', reverse: '方向反转 8 秒', up: '升上一层', down: '降下一层',
   rainbow: '随机一种效果', gold: '+50 分不变长', teleport: '传送到本层空格',
-  clock: '重置速度效果', bomb: '炸弹 扣 1 命'
+  clock: '重置速度效果', bomb: '炸弹 扣 1 命',
+  double: '双倍分 10 秒', ghost: '隐身 5 秒穿身', scissors: '蛇身减半'
 };
 function defaultSave() {
   return {v: 2, best: {endless: 0, survival: 0, timed: 0}, sound: false, stats: {climbs: 0, descents: 0, fruits: {}}, book: {}};
@@ -210,7 +213,8 @@ let audioCtx = null;
 const FRUIT_PITCH = {
   normal: 440, fast: 587, slow: 349, grow: 494,
   shrink: 330, reverse: 294, up: 659, down: 262,
-  rainbow: 622, gold: 880, teleport: 220, clock: 392, bomb: 110
+  rainbow: 622, gold: 880, teleport: 220, clock: 392, bomb: 110,
+  double: 988, ghost: 698, scissors: 175
 };
 
 let snake = [{x: 10, y: 10, z: 1}];
@@ -251,9 +255,12 @@ const FRUIT_STYLES = {
   gold:    '#fd0',
   teleport:'#666',
   clock:   '#fff',
-  bomb:    '#a00'
+  bomb:    '#a00',
+  double:  '#ccc',
+  ghost:   'rgba(120,120,120,0.5)',
+  scissors:'#860'
 };
-const BASE_POOL = ['normal','normal','normal','normal','fast','slow','grow','shrink','reverse','rainbow','gold','teleport','clock'];
+const BASE_POOL = ['normal','normal','normal','normal','fast','slow','grow','shrink','reverse','rainbow','gold','teleport','clock','double','ghost','scissors'];
 const RAINBOW_POOL = ['normal','fast','slow','grow','shrink','reverse','up','down'];
 
 let layers = {};
@@ -262,7 +269,7 @@ function ensureLayer(z, avoid) {
     layers[z] = {fruits: [], walls: []};
     for (let i = 0; i < 3; i++) layers[z].fruits.push(randomFruit(z, avoid));
     if (z >= 2) {
-      const count = 3 + Math.floor(Math.random() * 4);
+      const count = 3 + Math.floor(Math.random() * 4) + Math.min(2, Math.floor((z - 1) / 5));
       for (let i = 0; i < count; i++) layers[z].walls.push(randomWall(z, avoid));
     }
   }
@@ -270,6 +277,8 @@ function ensureLayer(z, avoid) {
 function fruitPool(z) {
   const pool = z >= 2 ? BASE_POOL.concat(['up', 'down']) : BASE_POOL.slice();
   if (mode === 'survival') pool.push('bomb');
+  const bonus = Math.min(3, Math.floor((z - 1) / 3));
+  for (let i = 0; i < bonus; i++) pool.push('gold', 'rainbow');
   return pool;
 }
 function randomFruit(z, avoid) {
@@ -329,12 +338,13 @@ function step() {
 
   const eatsHere = layers[head.z].fruits.some(f => f.x === head.x && f.y === head.y);
   const body = eatsHere ? old : old.slice(0, -1);
+  const ghosting = Date.now() < ghostUntil;
   const hitWall = layers[head.z].walls.some(w => w.x === head.x && w.y === head.y);
   if (hitWall) {
     head.z += 1;
     ensureLayer(head.z, head);
   }
-  climbIfColliding(head, body);
+  if (!ghosting) climbIfColliding(head, body);
   if (head.z > old[0].z) {
     showHint(hitWall ? 'wall' : 'climb', hitWall ? '撞到墙→爬上一层!' : '撞到自己→爬上一层!');
   }
@@ -368,12 +378,12 @@ function step() {
 
 function eat(f, z, eff) {
   if (eff === undefined) eff = f.type;
-  score++;
-  const prevScore = score - (f.type === 'gold' ? 51 : 1);
-  if (f.type === 'gold') {
-    score += 50;
-    showToast('+50 分!');
-  }
+  const mult = Date.now() < doubleUntil ? 2 : 1;
+  let gain = mult;
+  if (f.type === 'gold') gain += 50 * mult;
+  const prevScore = score;
+  score += gain;
+  if (f.type === 'gold') showToast('+' + gain + ' 分!');
   if (Math.floor(score / 100) > Math.floor(prevScore / 100)) showToast(score + ' 分!');
   if (score >= 999999999 && mode === 'endless') {
     cleared = true;
@@ -386,14 +396,21 @@ function eat(f, z, eff) {
   layers[z].fruits = layers[z].fruits.filter(x => x !== f);
   layers[z].fruits.push(randomFruit(z));
 
-  const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0, up: 0, down: 0, rainbow: 0, gold: 0, teleport: 0, clock: 0, bomb: 0}[eff];
+  const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0, up: 0, down: 0, rainbow: 0, gold: 0, teleport: 0, clock: 0, bomb: 0, double: 0, ghost: 0, scissors: 0}[eff];
   if (grow > 0) {
     const tail = snake[snake.length - 1];
     for (let i = 0; i < grow; i++) snake.push({x: tail.x, y: tail.y, z: tail.z});
   } else {
     for (let i = 0; i < -grow && snake.length > 2; i++) snake.pop();
   }
+  if (f.type === 'scissors') {
+    const target = Math.max(2, Math.floor(snake.length / 2));
+    while (snake.length > target) snake.pop();
+    showHint('scissors', '蛇身减半!');
+  }
 
+  if (f.type === 'double') { doubleUntil = Date.now() + 10000; showHint('double', '双倍分 10 秒!'); }
+  if (f.type === 'ghost') { ghostUntil = Date.now() + 5000; showHint('ghost', '隐身 5 秒,穿身不爬层!'); }
   if (eff === 'fast') { fastUntil = Date.now() + 6000; slowUntil = 0; showHint('fast', '加速 6 秒!'); }
   if (eff === 'slow') { slowUntil = Date.now() + 6000; fastUntil = 0; showHint('slow', '减速 6 秒!'); }
   if (eff === 'clock') { fastUntil = 0; slowUntil = 0; showHint('clock', '速度效果已重置!'); }
@@ -458,7 +475,11 @@ function fillFruitShape(type, px, py, size) {
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2;
     ctx.strokeRect(px + 1, py + 1, size - 2, size - 2);
-  } else if (type === 'rainbow' || type === 'clock') {
+  } else if (type === 'double') {
+    ctx.strokeStyle = 'rgba(246,190,0,' + (0.4 + 0.6 * Math.abs(Math.sin(Date.now() / 200))).toFixed(3) + ')';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 1, py + 1, size - 2, size - 2);
+  } else if (type === 'rainbow' || type === 'clock' || type === 'ghost') {
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1;
     ctx.strokeRect(px + 0.5, py + 0.5, size - 1, size - 1);
@@ -553,7 +574,8 @@ function draw() {
   const onLayer = snake.filter(s => s.z === z);
 
   const blink = Date.now() < invincibleUntil && Math.floor(Date.now() / 120) % 2 === 0;
-  ctx.globalAlpha = blink ? 0.25 : 1;
+  const ghosting = Date.now() < ghostUntil;
+  ctx.globalAlpha = blink ? 0.25 : (ghosting ? 0.45 : 1);
   ctx.fillStyle = '#000';
   for (let i = 0; i + 1 < onLayer.length; i++) {
     const a = onLayer[i], b = onLayer[i + 1];
@@ -583,7 +605,7 @@ function draw() {
   const fy = cy + dir.y * 7;
   const px = -dir.y * 4;
   const py = dir.x * 4;
-  ctx.globalAlpha = blink ? 0.25 : 1;
+  ctx.globalAlpha = blink ? 0.25 : (ghosting ? 0.45 : 1);
   ctx.fillStyle = '#fff';
   ctx.fillRect(fx + px - 2, fy + py - 2, 4, 4);
   ctx.fillRect(fx - px - 2, fy - py - 2, 4, 4);
@@ -619,14 +641,28 @@ function draw() {
   ctx.textAlign = 'left';
 
   const now = Date.now();
+  let buffY = 40;
   if (now < fastUntil) {
     ctx.fillStyle = '#0a0';
     ctx.font = 'bold 13px sans-serif';
-    ctx.fillText('加速 ' + Math.ceil((fastUntil - now) / 1000) + 's', 10, 40);
+    ctx.fillText('加速 ' + Math.ceil((fastUntil - now) / 1000) + 's', 10, buffY);
+    buffY += 18;
   } else if (now < slowUntil) {
     ctx.fillStyle = '#06c';
     ctx.font = 'bold 13px sans-serif';
-    ctx.fillText('减速 ' + Math.ceil((slowUntil - now) / 1000) + 's', 10, 40);
+    ctx.fillText('减速 ' + Math.ceil((slowUntil - now) / 1000) + 's', 10, buffY);
+    buffY += 18;
+  }
+  if (now < doubleUntil) {
+    ctx.fillStyle = '#b80';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('双倍分 ' + Math.ceil((doubleUntil - now) / 1000) + 's', 10, buffY);
+    buffY += 18;
+  }
+  if (now < ghostUntil) {
+    ctx.fillStyle = '#888';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('隐身 ' + Math.ceil((ghostUntil - now) / 1000) + 's', 10, buffY);
   }
 
   if (controlsReversed()) {
@@ -723,16 +759,18 @@ function draw() {
     ctx.fillText('果子图鉴(吃过点亮)', canvas.width / 2, 120);
     ctx.font = '13px sans-serif';
     const types = Object.keys(FRUIT_STYLES);
+    const perCol = Math.ceil(types.length / 2);
     for (let i = 0; i < types.length; i++) {
       const t = types[i];
-      const y = 144 + i * 24;
+      const x = 32 + Math.floor(i / perCol) * 186;
+      const y = 144 + (i % perCol) * 26;
       ctx.globalAlpha = save.book[t] ? 1 : 0.35;
-      fillFruitShape(t, 72, y - 11, 14);
+      fillFruitShape(t, x, y - 11, 14);
       ctx.globalAlpha = 1;
       ctx.fillStyle = save.book[t] ? '#000' : '#999';
       const count = save.stats.fruits[t] || 0;
       ctx.textAlign = 'left';
-      ctx.fillText(save.book[t] ? FRUIT_DESC[t] + ' ×' + count : '未尝出…', 96, y);
+      ctx.fillText(save.book[t] ? FRUIT_DESC[t] + ' ×' + count : '未尝出…', x + 22, y);
     }
     ctx.textAlign = 'left';
   }
@@ -752,6 +790,8 @@ function reset() {
   timedPauseLeft = 0;
   fastUntil = 0;
   slowUntil = 0;
+  doubleUntil = 0;
+  ghostUntil = 0;
   reverseUntil = 0;
   layers = {};
   ensureLayer(1);
