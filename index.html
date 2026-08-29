@@ -10,11 +10,11 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    background: #eee;
+    background: #4a3f35;
   }
   canvas {
-    background: #fff;
-    border: 2px solid #000;
+    background: #f7f2e7;
+    border: 3px solid #6d4c41;
   }
   .wrap {
     display: flex;
@@ -27,13 +27,14 @@
     align-items: center;
     gap: 8px;
     font-size: 14px;
-    color: #000;
+    color: #f7f2e7;
   }
   .controls button {
     padding: 4px 14px;
     font-size: 14px;
-    border: 1px solid #000;
-    background: #fff;
+    border: 1px solid #6d4c41;
+    background: #f7f2e7;
+    color: #1a1a1a;
     cursor: pointer;
   }
 </style>
@@ -269,6 +270,75 @@ const FRUIT_STYLES = {
 const BASE_POOL = ['normal','normal','normal','normal','fast','slow','grow','shrink','reverse','rainbow','gold','teleport','clock','double','ghost','scissors'];
 const RAINBOW_POOL = ['normal','fast','slow','grow','shrink','reverse','up','down'];
 
+/* ===== 「笔墨纸砚」色板(Zcode 设计稿,只动绘制层) ===== */
+const PALETTE = {
+  frame: '#6d4c41',
+  paper: {
+    xuan:    {bg: '#f7f2e7', fiber: '#e8e0cc'},
+    bamboo:  {bg: '#eef3ea', fiber: '#dbe5d6'},
+    silk:    {bg: '#f2e8dc', fiber: '#e4d6c2'}
+  },
+  inkDark: '#1a1a1a', inkLight: '#555555',
+  inkHalo: 'rgba(26,26,26,0.13)',
+  flyWhite: 'rgba(247,242,231,0.6)',
+  sealRed: '#b03a2e',
+  titleInk: '#1a1a1a', bodyInk: '#3a3a3a', unlit: '#9e9e9e',
+  shadow: 'rgba(60,50,30,0.18)'
+};
+const INK_COLORS = {
+  normal: '#b03a2e', fast: '#1e8449', slow: '#2874a6', grow: '#d4ac0d',
+  shrink: '#7d3c98', reverse: '#ca6f1e', up: '#c2185b', down: '#148f77',
+  gold: '#b7950b', teleport: '#566573', clock: '#e8f0f0',
+  bomb: '#ffffff', double: '#b7950b', ghost: 'rgba(80,80,80,0.45)',
+  rainbow: '#1a1a1a', scissors: '#7b4a12'
+};
+
+function lerpColor(c1, c2, t) {
+  const a = parseInt(c1.slice(1), 16);
+  const b = parseInt(c2.slice(1), 16);
+  const r = Math.round((a >> 16) + ((b >> 16) - (a >> 16)) * t);
+  const g = Math.round(((a >> 8) & 255) + (((b >> 8) & 255) - ((a >> 8) & 255)) * t);
+  const bl = Math.round((a & 255) + ((b & 255) - (a & 255)) * t);
+  return 'rgb(' + r + ',' + g + ',' + bl + ')';
+}
+function paperFor(z) {
+  const r = ((z % 3) + 3) % 3;
+  return r === 1 ? 'xuan' : (r === 2 ? 'bamboo' : 'silk');
+}
+const paperTex = {};
+(function buildPaperTextures() {
+  for (const key in PALETTE.paper) {
+    const c = document.createElement('canvas');
+    c.width = canvas.width;
+    c.height = canvas.height;
+    const t = c.getContext('2d');
+    t.strokeStyle = PALETTE.paper[key].fiber;
+    t.fillStyle = PALETTE.paper[key].fiber;
+    t.lineWidth = 1;
+    for (let i = 0; i < 80; i++) {
+      const x = Math.random() * c.width;
+      const y = Math.random() * c.height;
+      const len = 8 + Math.random() * 22;
+      const ang = Math.random() * Math.PI * 2;
+      const bend = (Math.random() - 0.5) * 12;
+      t.globalAlpha = 0.5;
+      t.beginPath();
+      t.moveTo(x, y);
+      t.quadraticCurveTo(x + Math.cos(ang) * len / 2 - Math.sin(ang) * bend, y + Math.sin(ang) * len / 2 + Math.cos(ang) * bend, x + Math.cos(ang) * len, y + Math.sin(ang) * len);
+      t.stroke();
+    }
+    t.fillStyle = '#ece4d0';
+    for (let i = 0; i < 40; i++) {
+      t.globalAlpha = 0.5;
+      t.beginPath();
+      t.arc(Math.random() * c.width, Math.random() * c.height, 0.5 + Math.random() * 0.5, 0, Math.PI * 2);
+      t.fill();
+    }
+    t.globalAlpha = 1;
+    paperTex[key] = c;
+  }
+})();
+
 let layers = {};
 function ensureLayer(z, avoid) {
   if (!layers[z]) {
@@ -466,47 +536,83 @@ function controlsReversed() {
 }
 
 function fillFruitShape(type, px, py, size) {
+  const cxp = px + size / 2;
+  const cyp = py + size / 2;
+  const showExtras = ctx.globalAlpha >= 0.99 && size >= 20;
+  let pool = INK_COLORS[type];
   if (type === 'rainbow') {
-    const g = ctx.createLinearGradient(px, py, px + size, py + size);
-    const t = Date.now() / 300;
-    for (let i = 0; i <= 5; i++) {
-      g.addColorStop(i / 5, 'hsl(' + Math.floor((t * 60 + i * 60) % 360) + ',85%,55%)');
-    }
-    ctx.fillStyle = g;
-  } else {
-    ctx.fillStyle = FRUIT_STYLES[type];
+    const v = (Math.sin(Date.now() / 600) + 1) / 2;
+    pool = lerpColor('#1a1a1a', '#888888', v);
   }
-  ctx.fillRect(px, py, size, size);
+  const body = type === 'bomb' ? '#8e2b25' : '#3e4450';
+  if (showExtras) {
+    ctx.save();
+    ctx.shadowColor = PALETTE.shadow;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+    ctx.shadowBlur = 2;
+  }
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(cxp, cyp, 0.4 * size, 0.325 * size, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#262b33';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = pool;
+  ctx.beginPath();
+  ctx.ellipse(cxp, cyp + 0.02 * size, 0.25 * size, 0.2 * size, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (showExtras) {
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = Math.max(1, size / 14);
+    ctx.beginPath();
+    ctx.ellipse(cxp, cyp + 0.02 * size, 0.25 * size, 0.2 * size, -0.6, -2.4, -0.9);
+    ctx.stroke();
+  }
   if (type === 'bomb') {
     ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(px + 1, py + 1, size - 2, size - 2);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(cxp, cyp, 0.4 * size + 1.5, 0.325 * size + 1.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
   } else if (type === 'double') {
     ctx.strokeStyle = 'rgba(246,190,0,' + (0.4 + 0.6 * Math.abs(Math.sin(Date.now() / 200))).toFixed(3) + ')';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(px + 1, py + 1, size - 2, size - 2);
-  } else if (type === 'rainbow' || type === 'clock' || type === 'ghost') {
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(px + 0.5, py + 0.5, size - 1, size - 1);
+    ctx.lineWidth = Math.max(1.2, size / 16);
+    ctx.beginPath();
+    ctx.ellipse(cxp, cyp, 0.4 * size + 1, 0.325 * size + 1, 0, 0, Math.PI * 2);
+    ctx.stroke();
   }
 }
 
 function drawWall(x, y) {
   const px = x * GRID;
   const py = y * GRID;
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(px, py, GRID, GRID);
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(px + 3, py + 3, GRID - 6, GRID - 6);
-  ctx.strokeStyle = '#bbb';
-  ctx.lineWidth = 2;
+  const s = 16;
+  const rx = px + (GRID - s) / 2;
+  const ry = py + (GRID - s) / 2;
+  ctx.save();
+  ctx.shadowColor = PALETTE.shadow;
+  ctx.shadowOffsetX = 2;
+  ctx.shadowOffsetY = 2;
+  ctx.shadowBlur = 2;
+  ctx.fillStyle = '#2f3640';
+  ctx.strokeStyle = '#1b2126';
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(px + 5, py + GRID - 5);
-  ctx.lineTo(px + GRID - 5, py + 5);
-  ctx.moveTo(px + 5, py + 5);
-  ctx.lineTo(px + GRID - 5, py + GRID - 5);
+  if (ctx.roundRect) ctx.roundRect(rx, ry, s, s, 3);
+  else ctx.rect(rx, ry, s, s);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+  ctx.strokeStyle = '#454e5c';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(rx + 3.5, ry + s - 3.5);
+  ctx.lineTo(rx + s - 3.5, ry + 3.5);
+  ctx.moveTo(rx + 3.5, ry + 3.5);
+  ctx.lineTo(rx + s - 3.5, ry + s - 3.5);
   ctx.stroke();
 }
 
@@ -557,10 +663,186 @@ function playSound(name, type) {
   }
 }
 
+function drawBrushHead(h, d) {
+  const cx = h.x * GRID + GRID / 2;
+  const cy = h.y * GRID + GRID / 2;
+  const px = -d.y;
+  const py = d.x;
+  ctx.save();
+  ctx.shadowColor = PALETTE.shadow;
+  ctx.shadowOffsetX = 2;
+  ctx.shadowOffsetY = 2;
+  ctx.shadowBlur = 2;
+  ctx.fillStyle = PALETTE.inkDark;
+  ctx.beginPath();
+  ctx.moveTo(cx + d.x * 11, cy + d.y * 11);
+  ctx.lineTo(cx + px * 5, cy + py * 5);
+  ctx.lineTo(cx - px * 5, cy - py * 5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#8d6e63';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx - d.x * 6, cy - d.y * 6);
+  ctx.stroke();
+  ctx.strokeStyle = '#a1887f';
+  ctx.beginPath();
+  ctx.moveTo(cx - d.x * 6, cy - d.y * 6);
+  ctx.lineTo(cx - d.x * 10, cy - d.y * 10);
+  ctx.stroke();
+  ctx.strokeStyle = '#c9a227';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - d.x * 9, cy - d.y * 9);
+  ctx.lineTo(cx - d.x * 10, cy - d.y * 10);
+  ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(cx + d.x * 2 + px * 3, cy + d.y * 2 + py * 3, 1.8, 0, Math.PI * 2);
+  ctx.arc(cx + d.x * 2 - px * 3, cy + d.y * 2 - py * 3, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = PALETTE.sealRed;
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = 'butt';
+  const tx = cx + d.x * 16;
+  const ty = cy + d.y * 16;
+  ctx.beginPath();
+  ctx.moveTo(cx + d.x * 11, cy + d.y * 11);
+  ctx.lineTo(tx, ty);
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(tx + d.x * 2 - d.y * 2, ty + d.y * 2 + d.x * 2);
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(tx + d.x * 2 + d.y * 2, ty + d.y * 2 - d.x * 2);
+  ctx.stroke();
+}
+
+function drawInkSnake(cells, headW, tailW, headDir) {
+  const n = cells.length;
+  if (n === 0) return;
+  const pts = cells.map(s => ({x: s.x * GRID + GRID / 2, y: s.y * GRID + GRID / 2}));
+  const near = (i) => Math.abs(cells[i - 1].x - cells[i].x) + Math.abs(cells[i - 1].y - cells[i].y) === 1;
+  const w = (i) => headW - (headW - tailW) * (i / n);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = PALETTE.inkHalo;
+  for (let i = 1; i < n; i++) {
+    if (!near(i)) continue;
+    ctx.lineWidth = w(i) + 4;
+    ctx.beginPath();
+    ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
+    ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+  }
+  for (let i = 1; i < n; i++) {
+    if (!near(i)) continue;
+    ctx.strokeStyle = lerpColor(PALETTE.inkDark, PALETTE.inkLight, i / n);
+    ctx.lineWidth = w(i);
+    ctx.beginPath();
+    ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
+    ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = PALETTE.flyWhite;
+  ctx.lineWidth = 1;
+  for (let i = Math.max(1, Math.floor(n * 0.7)); i < n; i++) {
+    if (!near(i)) continue;
+    const a = pts[i - 1];
+    const b = pts[i];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    const ux = dx / len;
+    const uy = dy / len;
+    const midx = (a.x + b.x) / 2;
+    const midy = (a.y + b.y) / 2;
+    const half = len * 0.3;
+    for (let k = 0; k < 2; k++) {
+      const off = (k === 0 ? 1 : -1) * (1.2 + Math.random() * 1.2);
+      ctx.beginPath();
+      ctx.moveTo(midx - ux * half - uy * off, midy - uy * half + ux * off);
+      ctx.lineTo(midx + ux * half - uy * off, midy + uy * half + ux * off);
+      ctx.stroke();
+    }
+  }
+  if (headDir) drawBrushHead(cells[0], headDir);
+}
+
+function sealSize(label, text) {
+  ctx.save();
+  ctx.font = 'bold 9px sans-serif';
+  const lw = ctx.measureText(label).width;
+  ctx.font = 'bold 14px sans-serif';
+  const tw = ctx.measureText(text).width;
+  ctx.restore();
+  return Math.max(lw, tw) + 14;
+}
+function drawSeal(x, y, label, text) {
+  const w = sealSize(label, text);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-3 * Math.PI / 180);
+  ctx.fillStyle = PALETTE.sealRed;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(0, 0, w, 24, 3);
+  else ctx.rect(0, 0, w, 24);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 9px sans-serif';
+  ctx.fillText(label, w / 2, 9);
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(text, w / 2, 21);
+  ctx.restore();
+  return w;
+}
+function overlayBase() {
+  ctx.fillStyle = 'rgba(247,242,231,0.88)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+function cardRect(x, y, w, h) {
+  ctx.save();
+  ctx.shadowColor = PALETTE.shadow;
+  ctx.shadowOffsetX = 2;
+  ctx.shadowOffsetY = 2;
+  ctx.shadowBlur = 2;
+  ctx.fillStyle = '#fbf7ee';
+  ctx.strokeStyle = '#c9bfa8';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, 10);
+  else ctx.rect(x, y, w, h);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+function bigStamp(cx, cy, text) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-8 * Math.PI / 180);
+  const s = 56;
+  ctx.fillStyle = PALETTE.sealRed;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(-s / 2, -s / 2, s, s, 6);
+  else ctx.rect(-s / 2, -s / 2, s, s);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 24px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 0, 1);
+  ctx.restore();
+  ctx.textBaseline = 'alphabetic';
+}
+
 function draw() {
   const z = snake[0].z;
-  ctx.fillStyle = '#fff';
+  const paper = PALETTE.paper[paperFor(z)];
+  ctx.fillStyle = paper.bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(paperTex[paperFor(z)], 0, 0);
 
   ctx.globalAlpha = 0.15;
   for (const dz of [z - 1, z + 1]) {
@@ -575,141 +857,78 @@ function draw() {
     drawWall(w.x, w.y);
   }
 
-  const INSET = 3;
-  const RADIUS = 5;
   const onLayer = snake.filter(s => s.z === z);
 
   const blink = Date.now() < invincibleUntil && Math.floor(Date.now() / 120) % 2 === 0;
   const ghosting = Date.now() < ghostUntil;
   ctx.globalAlpha = blink ? 0.25 : (ghosting ? 0.45 : 1);
-  ctx.fillStyle = '#000';
-  for (let i = 0; i + 1 < onLayer.length; i++) {
-    const a = onLayer[i], b = onLayer[i + 1];
-    if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) !== 1) continue;
-    if (a.x === b.x) {
-      const y = Math.min(a.y, b.y);
-      ctx.fillRect(a.x * GRID + INSET, y * GRID + GRID / 2, GRID - INSET * 2, GRID);
-    } else {
-      const x = Math.min(a.x, b.x);
-      ctx.fillRect(x * GRID + GRID / 2, a.y * GRID + INSET, GRID, GRID - INSET * 2);
-    }
-  }
-  for (let i = 1; i < onLayer.length; i++) {
-    const s = onLayer[i];
-    const tailN = onLayer.length - 1 - i;
-    const inset = tailN === 0 ? 6.5 : (tailN === 1 ? 5 : INSET);
-    const rad = tailN === 0 ? 4 : (tailN === 1 ? 4.5 : RADIUS);
-    ctx.beginPath();
-    if (ctx.roundRect) {
-      ctx.roundRect(s.x * GRID + inset, s.y * GRID + inset, GRID - inset * 2, GRID - inset * 2, rad);
-    } else {
-      ctx.rect(s.x * GRID + inset, s.y * GRID + inset, GRID - inset * 2, GRID - inset * 2);
-    }
-    ctx.fill();
-  }
-
-  const h = snake[0];
-  const cx = h.x * GRID + GRID / 2;
-  const cy = h.y * GRID + GRID / 2;
-  const fx = cx + dir.x * 7;
-  const fy = cy + dir.y * 7;
-  const px = -dir.y * 4;
-  const py = dir.x * 4;
-  ctx.globalAlpha = blink ? 0.25 : (ghosting ? 0.45 : 1);
-  ctx.fillStyle = '#000';
-  ctx.beginPath();
-  ctx.arc(cx, cy, 9.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#d00';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  const tx = cx + dir.x * 15;
-  const ty = cy + dir.y * 15;
-  ctx.moveTo(cx + dir.x * 9, cy + dir.y * 9);
-  ctx.lineTo(tx, ty);
-  ctx.moveTo(tx, ty);
-  ctx.lineTo(tx + dir.x * 2.5 - dir.y * 2.5, ty + dir.y * 2.5 + dir.x * 2.5);
-  ctx.moveTo(tx, ty);
-  ctx.lineTo(tx + dir.x * 2.5 + dir.y * 2.5, ty + dir.y * 2.5 - dir.x * 2.5);
-  ctx.stroke();
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(fx + px - 2, fy + py - 2, 4, 4);
-  ctx.fillRect(fx - px - 2, fy - py - 2, 4, 4);
-  ctx.fillStyle = '#000';
-  ctx.fillRect(fx + px - 1, fy + py - 1, 2, 2);
-  ctx.fillRect(fx - px - 1, fy - py - 1, 2, 2);
+  drawInkSnake(onLayer, 13, 5, dir);
   ctx.globalAlpha = 1;
 
   for (const f of layers[z].fruits) {
     fillFruitShape(f.type, f.x * GRID, f.y * GRID, GRID);
   }
 
-  ctx.fillStyle = '#000';
-  ctx.font = 'bold 16px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('得分: ' + score + '  第' + z + '层', 10, 20);
+  const wScore = drawSeal(10, 8, '得分', '' + score);
+  drawSeal(10 + wScore + 6, 8, '层', '' + z);
 
   if (mode === 'timed' && started && !settled) {
     const left = Math.max(0, timedEndsAt - Date.now());
     const mm = Math.floor(left / 60000);
     const ss = Math.floor(left % 60000 / 1000);
-    ctx.fillStyle = left <= 10000 ? '#d00' : '#000';
-    ctx.font = 'bold 16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('剩余 ' + mm + ':' + (ss < 10 ? '0' : '') + ss, canvas.width / 2, 20);
+    const text = mm + ':' + (ss < 10 ? '0' : '') + ss;
+    const w = sealSize('剩余', text);
+    const flashing = left <= 10000 && Math.floor(Date.now() / 400) % 2 === 0;
+    ctx.globalAlpha = flashing ? 0.4 : 1;
+    drawSeal(canvas.width - 10 - w, 8, '剩余', text);
+    ctx.globalAlpha = 1;
   }
   if (mode === 'survival' && started && !settled) {
-    ctx.fillStyle = Date.now() < invincibleUntil ? '#a00' : '#000';
+    ctx.fillStyle = Date.now() < invincibleUntil ? PALETTE.sealRed : PALETTE.inkDark;
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('命 ×' + lives, canvas.width / 2, 20);
+    ctx.textAlign = 'left';
   }
-  ctx.textAlign = 'left';
 
   const now = Date.now();
   let buffY = 40;
-  if (now < fastUntil) {
-    ctx.fillStyle = '#0a0';
+  function buffLine(color, text) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(14, buffY - 4, 3, 0, Math.PI * 2);
+    ctx.fill();
     ctx.font = 'bold 13px sans-serif';
-    ctx.fillText('加速 ' + Math.ceil((fastUntil - now) / 1000) + 's', 10, buffY);
-    buffY += 18;
-  } else if (now < slowUntil) {
-    ctx.fillStyle = '#06c';
-    ctx.font = 'bold 13px sans-serif';
-    ctx.fillText('减速 ' + Math.ceil((slowUntil - now) / 1000) + 's', 10, buffY);
-    buffY += 18;
-  }
-  if (now < doubleUntil) {
-    ctx.fillStyle = '#b80';
-    ctx.font = 'bold 13px sans-serif';
-    ctx.fillText('双倍分 ' + Math.ceil((doubleUntil - now) / 1000) + 's', 10, buffY);
+    ctx.textAlign = 'left';
+    ctx.fillText(text, 22, buffY);
     buffY += 18;
   }
-  if (now < ghostUntil) {
-    ctx.fillStyle = '#888';
-    ctx.font = 'bold 13px sans-serif';
-    ctx.fillText('隐身 ' + Math.ceil((ghostUntil - now) / 1000) + 's', 10, buffY);
-  }
+  if (now < fastUntil) buffLine(INK_COLORS.fast, '加速 ' + Math.ceil((fastUntil - now) / 1000) + 's');
+  else if (now < slowUntil) buffLine(INK_COLORS.slow, '减速 ' + Math.ceil((slowUntil - now) / 1000) + 's');
+  if (now < doubleUntil) buffLine(INK_COLORS.double, '双倍分 ' + Math.ceil((doubleUntil - now) / 1000) + 's');
+  if (now < ghostUntil) buffLine(INK_COLORS.teleport, '隐身 ' + Math.ceil((ghostUntil - now) / 1000) + 's');
 
   if (controlsReversed()) {
-    ctx.fillStyle = '#f80';
+    ctx.fillStyle = INK_COLORS.reverse;
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'right';
     const secs = Math.ceil((reverseUntil - Date.now()) / 1000);
-    ctx.fillText('方向反转 ' + secs + 's', canvas.width - 10, 20);
+    ctx.fillText('方向反转 ' + secs + 's', canvas.width - 10, 46);
     ctx.textAlign = 'left';
   }
 
   const t = Date.now() - layerChangeAt;
-  if (started && !paused && !cleared && t < 500) {
+  if (started && !paused && !cleared && !settled && t < 500) {
     const k = 1 - t / 500;
-    ctx.fillStyle = 'rgba(255,255,255,' + (0.45 * k).toFixed(3) + ')';
+    ctx.globalAlpha = 0.5 * k;
+    ctx.fillStyle = paper.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'rgba(0,0,0,' + k.toFixed(3) + ')';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(26,26,26,' + k.toFixed(3) + ')';
     ctx.font = 'bold 26px sans-serif';
     ctx.textAlign = 'center';
     const bounce = Math.round(-18 * Math.sin((1 - k) * Math.PI));
-    ctx.fillText((layerChangeDir > 0 ? '↑ 进入第 ' : '↓ 回到第 ') + z + ' 层', canvas.width / 2, canvas.height / 2 + bounce);
+    ctx.fillText((layerChangeDir > 0 ? '↑ 翻页 · 第 ' : '↓ 回帖 · 第 ') + z + ' 层', canvas.width / 2, canvas.height / 2 + bounce);
   }
 
   if (toastMsg) {
@@ -717,86 +936,96 @@ function draw() {
     if (age < 1000) {
       const k = Math.min(1, age / 150, (1000 - age) / 250);
       ctx.globalAlpha = k;
-      ctx.fillStyle = '#000';
       ctx.font = 'bold 15px sans-serif';
+      const tw = ctx.measureText(toastMsg.text).width;
+      const bw = tw + 20;
+      const bh = 26;
+      const bx = (canvas.width - bw) / 2;
+      const by = 30;
+      ctx.fillStyle = 'rgba(38,40,40,0.78)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, bh / 2);
+      else ctx.rect(bx, by, bw, bh);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
       ctx.textAlign = 'center';
-      ctx.fillText(toastMsg.text, canvas.width / 2, 44);
+      ctx.fillText(toastMsg.text, canvas.width / 2, by + 17);
       ctx.globalAlpha = 1;
       ctx.textAlign = 'left';
     }
   }
 
   if (settled) {
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#000';
-    ctx.font = 'bold 28px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(settleReason === 'dead' ? '命用完了!' : '时间到!', canvas.width / 2, canvas.height / 2 - 40);
-    ctx.font = '16px sans-serif';
-    ctx.fillText(MODE_NAMES[mode] + '模式  得分: ' + score, canvas.width / 2, canvas.height / 2 - 8);
-    ctx.fillText(score > bestAtStart ? '新纪录!' : '最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 18);
-    ctx.fillText('点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 46);
-  } else if (cleared) {
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#000';
-    ctx.font = 'bold 28px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('通关!', canvas.width / 2, canvas.height / 2 - 20);
-    ctx.font = '16px sans-serif';
-    ctx.fillText('得分: ' + score, canvas.width / 2, canvas.height / 2 + 10);
-    ctx.fillText('最高分: ' + save.best.endless, canvas.width / 2, canvas.height / 2 + 32);
-    ctx.fillText('点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 54);
-  } else if (!started) {
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.globalAlpha = 0.3;
-    ctx.fillStyle = '#000';
-    for (const s of demoSnake) {
-      ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(s.x * GRID + INSET, s.y * GRID + INSET, GRID - INSET * 2, GRID - INSET * 2, RADIUS);
-      } else {
-        ctx.rect(s.x * GRID + INSET, s.y * GRID + INSET, GRID - INSET * 2, GRID - INSET * 2);
-      }
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = '#000';
-    ctx.font = 'bold 24px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('贪吃蛇', canvas.width / 2, canvas.height / 2 - 34);
-    ctx.font = '16px sans-serif';
-    ctx.fillText(MODE_DESC[mode], canvas.width / 2, canvas.height / 2 - 4);
-    ctx.fillText('最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 20);
-    ctx.fillText('点击开始按钮开始游戏', canvas.width / 2, canvas.height / 2 + 44);
-  } else if (paused) {
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#000';
+    overlayBase();
+    cardRect(70, 112, 260, 172);
+    ctx.fillStyle = PALETTE.titleInk;
     ctx.font = 'bold 22px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('暂停中', canvas.width / 2, 46);
+    ctx.fillText(settleReason === 'dead' ? '命用完了!' : '时间到!', canvas.width / 2, 158);
+    ctx.fillStyle = PALETTE.bodyInk;
+    ctx.font = '14px sans-serif';
+    ctx.fillText(MODE_NAMES[mode] + '模式  得分: ' + score, canvas.width / 2, 186);
+    ctx.fillText(score > bestAtStart ? '新纪录!  得分 ' + score : '最高分: ' + save.best[mode], canvas.width / 2, 210);
+    ctx.fillText('点击开始按钮再来一局', canvas.width / 2, 238);
+    bigStamp(326, 142, score > bestAtStart ? '新纪录' : '结算');
+  } else if (cleared) {
+    overlayBase();
+    cardRect(80, 118, 240, 160);
+    ctx.fillStyle = PALETTE.titleInk;
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('通关!', canvas.width / 2, 160);
+    ctx.fillStyle = PALETTE.bodyInk;
+    ctx.font = '14px sans-serif';
+    ctx.fillText('得分: ' + score, canvas.width / 2, 188);
+    ctx.fillText('最高分: ' + save.best.endless, canvas.width / 2, 212);
+    ctx.fillText('点击开始按钮再来一局', canvas.width / 2, 238);
+    bigStamp(314, 138, '通关');
+  } else if (!started) {
+    overlayBase();
+    ctx.globalAlpha = 0.3;
+    drawInkSnake(demoSnake, 8, 4, demoDir);
+    ctx.globalAlpha = 1;
+    cardRect(60, 128, 280, 152);
+    ctx.fillStyle = PALETTE.titleInk;
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('贪吃蛇', canvas.width / 2, 170);
+    ctx.fillStyle = PALETTE.bodyInk;
+    ctx.font = '14px sans-serif';
+    ctx.fillText(MODE_DESC[mode], canvas.width / 2, 198);
+    ctx.fillText('最高分: ' + save.best[mode], canvas.width / 2, 222);
+    ctx.fillText('点击开始按钮开始游戏', canvas.width / 2, 246);
+    ctx.fillStyle = PALETTE.unlit;
+    ctx.font = '10px sans-serif';
+    ctx.fillText('笔墨纸砚 · 伪三层', canvas.width / 2, 266);
+  } else if (paused) {
+    overlayBase();
+    cardRect(18, 28, 364, 340);
+    ctx.fillStyle = PALETTE.titleInk;
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('暂停中', canvas.width / 2, 58);
+    ctx.fillStyle = PALETTE.bodyInk;
     ctx.font = '13px sans-serif';
-    ctx.fillText('按空格或点击暂停按钮继续', canvas.width / 2, 68);
-    ctx.fillText(MODE_NAMES[mode] + '模式最高分: ' + save.best[mode] + '   爬层: 升 ' + save.stats.climbs + ' / 降 ' + save.stats.descents, canvas.width / 2, 92);
+    ctx.fillText('按空格或点击暂停按钮继续', canvas.width / 2, 78);
+    ctx.fillText(MODE_NAMES[mode] + '模式最高分: ' + save.best[mode] + '   爬层: 升 ' + save.stats.climbs + ' / 降 ' + save.stats.descents, canvas.width / 2, 98);
     ctx.font = 'bold 15px sans-serif';
-    ctx.fillText('果子图鉴(吃过点亮)', canvas.width / 2, 120);
+    ctx.fillText('果子图鉴(吃过点亮)', canvas.width / 2, 122);
     ctx.font = '13px sans-serif';
     const types = Object.keys(FRUIT_STYLES);
     const perCol = Math.ceil(types.length / 2);
     for (let i = 0; i < types.length; i++) {
-      const t = types[i];
-      const x = 32 + Math.floor(i / perCol) * 186;
-      const y = 144 + (i % perCol) * 26;
-      ctx.globalAlpha = save.book[t] ? 1 : 0.35;
-      fillFruitShape(t, x, y - 11, 14);
+      const tt = types[i];
+      const x = 32 + Math.floor(i / perCol) * 180;
+      const y = 142 + (i % perCol) * 25;
+      ctx.globalAlpha = save.book[tt] ? 1 : 0.35;
+      fillFruitShape(tt, x, y - 10, 14);
       ctx.globalAlpha = 1;
-      ctx.fillStyle = save.book[t] ? '#000' : '#999';
-      const count = save.stats.fruits[t] || 0;
+      ctx.fillStyle = save.book[tt] ? PALETTE.bodyInk : PALETTE.unlit;
+      const count = save.stats.fruits[tt] || 0;
       ctx.textAlign = 'left';
-      ctx.fillText(save.book[t] ? FRUIT_DESC[t] + ' ×' + count : '未尝出…', x + 22, y);
+      ctx.fillText(save.book[tt] ? FRUIT_DESC[tt] + ' ×' + count : '未尝出…', x + 20, y);
     }
     ctx.textAlign = 'left';
   }
