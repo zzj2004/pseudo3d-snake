@@ -217,7 +217,13 @@ const FRUIT_PITCH = {
   double: 988, ghost: 698, scissors: 175
 };
 
-let snake = [{x: 10, y: 10, z: 1}];
+let snake = [
+  {x: 10, y: 10, z: 1},
+  {x: 9, y: 10, z: 1},
+  {x: 8, y: 10, z: 1},
+  {x: 7, y: 10, z: 1},
+  {x: 6, y: 10, z: 1}
+];
 let dir = {x: 1, y: 0};
 let nextDir = dir;
 
@@ -588,12 +594,16 @@ function draw() {
       ctx.fillRect(x * GRID + GRID / 2, a.y * GRID + INSET, GRID, GRID - INSET * 2);
     }
   }
-  for (const s of onLayer) {
+  for (let i = 1; i < onLayer.length; i++) {
+    const s = onLayer[i];
+    const tailN = onLayer.length - 1 - i;
+    const inset = tailN === 0 ? 6.5 : (tailN === 1 ? 5 : INSET);
+    const rad = tailN === 0 ? 4 : (tailN === 1 ? 4.5 : RADIUS);
     ctx.beginPath();
     if (ctx.roundRect) {
-      ctx.roundRect(s.x * GRID + INSET, s.y * GRID + INSET, GRID - INSET * 2, GRID - INSET * 2, RADIUS);
+      ctx.roundRect(s.x * GRID + inset, s.y * GRID + inset, GRID - inset * 2, GRID - inset * 2, rad);
     } else {
-      ctx.rect(s.x * GRID + INSET, s.y * GRID + INSET, GRID - INSET * 2, GRID - INSET * 2);
+      ctx.rect(s.x * GRID + inset, s.y * GRID + inset, GRID - inset * 2, GRID - inset * 2);
     }
     ctx.fill();
   }
@@ -606,6 +616,22 @@ function draw() {
   const px = -dir.y * 4;
   const py = dir.x * 4;
   ctx.globalAlpha = blink ? 0.25 : (ghosting ? 0.45 : 1);
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 9.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#d00';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  const tx = cx + dir.x * 15;
+  const ty = cy + dir.y * 15;
+  ctx.moveTo(cx + dir.x * 9, cy + dir.y * 9);
+  ctx.lineTo(tx, ty);
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(tx + dir.x * 2.5 - dir.y * 2.5, ty + dir.y * 2.5 + dir.x * 2.5);
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(tx + dir.x * 2.5 + dir.y * 2.5, ty + dir.y * 2.5 - dir.x * 2.5);
+  ctx.stroke();
   ctx.fillStyle = '#fff';
   ctx.fillRect(fx + px - 2, fy + py - 2, 4, 4);
   ctx.fillRect(fx - px - 2, fy - py - 2, 4, 4);
@@ -777,7 +803,13 @@ function draw() {
 }
 
 function reset() {
-  snake = [{x: 10, y: 10, z: 1}];
+  snake = [
+    {x: 10, y: 10, z: 1},
+    {x: 9, y: 10, z: 1},
+    {x: 8, y: 10, z: 1},
+    {x: 7, y: 10, z: 1},
+    {x: 6, y: 10, z: 1}
+  ];
   dir = {x: 1, y: 0};
   nextDir = dir;
   score = 0;
