@@ -928,7 +928,7 @@ function draw() {
     ctx.font = 'bold 26px sans-serif';
     ctx.textAlign = 'center';
     const bounce = Math.round(-18 * Math.sin((1 - k) * Math.PI));
-    ctx.fillText((layerChangeDir > 0 ? '↑ 翻页 · 第 ' : '↓ 回帖 · 第 ') + z + ' 层', canvas.width / 2, canvas.height / 2 + bounce);
+    ctx.fillText((layerChangeDir > 0 ? '↑ 翻页 · 第 ' : '↓ 回页 · 第 ') + z + ' 层', canvas.width / 2, canvas.height / 2 + bounce);
   }
 
   if (toastMsg) {
