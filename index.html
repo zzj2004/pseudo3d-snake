@@ -120,8 +120,8 @@ function togglePause() {
 const modeBtn = document.getElementById('modeBtn');
 const MODE_NAMES = {endless: '无尽', survival: '有命', timed: '限时'};
 const MODE_DESC = {
-  endless: '无尽模式:经典玩法,永不结束',
-  survival: '有命模式:3 条命,小心炸弹果',
+  endless: '无尽模式:经典玩法,小心炸弹与陷阱',
+  survival: '有命模式:3 条命,小心炸弹与陷阱',
   timed: '限时模式:180 秒冲高分'
 };
 let mode = 'endless';
@@ -287,20 +287,22 @@ const RAINBOW_POOL = ['normal','fast','slow','grow','shrink','reverse','up','dow
 let layers = {};
 function ensureLayer(z, avoid) {
   if (!layers[z]) {
-    layers[z] = {fruits: [], walls: []};
+    layers[z] = {fruits: [], walls: [], traps: []};
     for (let i = 0; i < 3; i++) layers[z].fruits.push(randomFruit(z, avoid, true));
     if (z >= 2) {
-      const count = 3 + Math.floor(Math.random() * 4) + Math.min(2, Math.floor((z - 1) / 5));
+      const count = 4 + Math.floor(Math.random() * 4) + Math.min(4, Math.floor((z - 1) / 2));
       for (let i = 0; i < count; i++) layers[z].walls.push(randomWall(z, avoid));
+      const tcount = 1 + Math.min(2, Math.floor((z - 1) / 3));
+      for (let i = 0; i < tcount; i++) layers[z].traps.push(randomWall(z, avoid));
     }
   }
 }
 function fruitPool(z) {
   const pool = z >= 2 ? BASE_POOL.concat(['up', 'down']) : BASE_POOL.slice();
-  if (mode === 'survival') {
-    pool.push('bomb');
-    if (z >= 5) pool.push('bomb');
-  }
+  pool.push('bomb', 'bomb');
+  if (z >= 3) pool.push('bomb');
+  if (z >= 6) pool.push('bomb');
+  if (mode === 'survival') pool.push('bomb');
   const bonus = Math.min(3, Math.floor((z - 1) / 3));
   for (let i = 0; i < bonus; i++) pool.push('gold', 'rainbow');
   return pool;
@@ -317,6 +319,7 @@ function randomFruit(z, avoid, noUp) {
   } while (snake.some(s => s.z === z && s.x === p.x && s.y === p.y) ||
            fruits.some(f => f.x === p.x && f.y === p.y) ||
            layers[z].walls.some(w => w.x === p.x && w.y === p.y) ||
+           layers[z].traps.some(t => t.x === p.x && t.y === p.y) ||
            (avoid && avoid.x === p.x && avoid.y === p.y));
   p.type = pool[Math.floor(Math.random() * pool.length)];
   return p;
@@ -329,6 +332,7 @@ function randomWall(z, avoid) {
       y: Math.floor(Math.random() * ROWS)
     };
   } while (layers[z].walls.some(w => w.x === p.x && w.y === p.y) ||
+           layers[z].traps.some(t => t.x === p.x && t.y === p.y) ||
            layers[z].fruits.some(f => f.x === p.x && f.y === p.y) ||
            snake.some(s => s.z === z && s.x === p.x && s.y === p.y) ||
            (avoid && avoid.x === p.x && avoid.y === p.y));
@@ -412,6 +416,14 @@ function step() {
     if (layerChangeDir > 0) save.stats.climbs++; else save.stats.descents++;
     persist();
   }
+
+  if (Date.now() >= invincibleUntil) {
+    const lay = layers[snake[0].z];
+    if (lay.traps.some(t => t.x === snake[0].x && t.y === snake[0].y)) {
+      loseLife('踩中陷阱');
+      playSound('bomb');
+    }
+  }
 }
 
 function eat(f, z, eff) {
@@ -463,7 +475,8 @@ function eat(f, z, eff) {
     } while (
       snake.some(s => s.z === z2 && s.x === p.x && s.y === p.y) ||
       layers[z2].fruits.some(q => q.x === p.x && q.y === p.y) ||
-      layers[z2].walls.some(w => w.x === p.x && w.y === p.y)
+      layers[z2].walls.some(w => w.x === p.x && w.y === p.y) ||
+      layers[z2].traps.some(t => t.x === p.x && t.y === p.y)
     );
     snake[0].x = p.x;
     snake[0].y = p.y;
@@ -473,17 +486,21 @@ function eat(f, z, eff) {
     if (Date.now() < invincibleUntil) {
       showToast('无敌中,炸弹无效!');
     } else {
-      lives--;
-      if (lives <= 0) {
-        settle('dead');
-      } else {
-        invincibleUntil = Date.now() + 2000;
-        showToast('扣 1 命!剩 ' + lives + ' 命');
-      }
+      loseLife('扣 1 命');
     }
     playSound('bomb');
   } else if (f.type === 'reverse') playSound('reverse');
   else if (f.type !== 'up' && f.type !== 'down') playSound('eat', f.type);
+}
+
+function loseLife(msg) {
+  lives--;
+  if (lives <= 0) {
+    settle('dead');
+  } else {
+    invincibleUntil = Date.now() + 2000;
+    showToast(msg + '!剩 ' + lives + ' 命');
+  }
 }
 
 function settle(reason) {
@@ -540,6 +557,23 @@ function drawWall(x, y) {
   ctx.moveTo(px + 5, py + 5);
   ctx.lineTo(px + GRID - 5, py + GRID - 5);
   ctx.stroke();
+}
+
+function drawTrap(x, y) {
+  const px = x * GRID;
+  const py = y * GRID;
+  ctx.fillStyle = '#222';
+  ctx.fillRect(px + 1, py + 1, GRID - 2, GRID - 2);
+  ctx.fillStyle = '#aaa';
+  for (let i = 0; i < 3; i++) {
+    const sx = px + 4 + i * 5;
+    ctx.beginPath();
+    ctx.moveTo(sx, py + GRID - 4);
+    ctx.lineTo(sx + 2.5, py + 6);
+    ctx.lineTo(sx + 5, py + GRID - 4);
+    ctx.closePath();
+    ctx.fill();
+  }
 }
 
 function ensureAudio() {
@@ -643,11 +677,17 @@ function draw() {
     for (const f of layers[dz].fruits) {
       fillFruitShape(f.type, f.x * GRID, f.y * GRID, GRID);
     }
+    for (const t of layers[dz].traps) {
+      drawTrap(t.x, t.y);
+    }
   }
   ctx.globalAlpha = 1;
 
   for (const w of layers[z].walls) {
     drawWall(w.x, w.y);
+  }
+  for (const t of layers[z].traps) {
+    drawTrap(t.x, t.y);
   }
 
   const INSET = 3;
@@ -733,11 +773,12 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.fillText('剩余 ' + mm + ':' + (ss < 10 ? '0' : '') + ss, canvas.width / 2, 20);
   }
-  if (mode === 'survival' && started && !settled) {
+  if (started && !settled) {
     ctx.fillStyle = Date.now() < invincibleUntil ? '#a00' : '#000';
     ctx.font = 'bold 16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('命 ×' + lives, canvas.width / 2, 20);
+    ctx.textAlign = 'right';
+    ctx.fillText('命 ×' + lives, canvas.width - 10, 20);
+    ctx.textAlign = 'left';
   }
   ctx.textAlign = 'left';
 
@@ -771,7 +812,7 @@ function draw() {
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'right';
     const secs = Math.ceil((reverseUntil - Date.now()) / 1000);
-    ctx.fillText('方向反转 ' + secs + 's', canvas.width - 10, 20);
+    ctx.fillText('方向反转 ' + secs + 's', canvas.width - 10, 42);
     ctx.textAlign = 'left';
   }
 
