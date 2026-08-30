@@ -288,7 +288,7 @@ let layers = {};
 function ensureLayer(z, avoid) {
   if (!layers[z]) {
     layers[z] = {fruits: [], walls: []};
-    for (let i = 0; i < 3; i++) layers[z].fruits.push(randomFruit(z, avoid));
+    for (let i = 0; i < 3; i++) layers[z].fruits.push(randomFruit(z, avoid, true));
     if (z >= 2) {
       const count = 3 + Math.floor(Math.random() * 4) + Math.min(2, Math.floor((z - 1) / 5));
       for (let i = 0; i < count; i++) layers[z].walls.push(randomWall(z, avoid));
@@ -297,13 +297,16 @@ function ensureLayer(z, avoid) {
 }
 function fruitPool(z) {
   const pool = z >= 2 ? BASE_POOL.concat(['up', 'down']) : BASE_POOL.slice();
-  if (mode === 'survival') pool.push('bomb');
+  if (mode === 'survival') {
+    pool.push('bomb');
+    if (z >= 5) pool.push('bomb');
+  }
   const bonus = Math.min(3, Math.floor((z - 1) / 3));
   for (let i = 0; i < bonus; i++) pool.push('gold', 'rainbow');
   return pool;
 }
-function randomFruit(z, avoid) {
-  const pool = fruitPool(z);
+function randomFruit(z, avoid, noUp) {
+  const pool = fruitPool(z).filter(t => !noUp || t !== 'up');
   const fruits = layers[z].fruits;
   let p;
   do {
@@ -351,11 +354,27 @@ function step() {
   const old = snake.map(s => ({x: s.x, y: s.y, z: s.z}));
   const head = {x: old[0].x + dir.x, y: old[0].y + dir.y, z: old[0].z};
   let wrapped = false;
-  if (head.x < 0) { head.x = COLS - 1; wrapped = true; }
-  if (head.x >= COLS) { head.x = 0; wrapped = true; }
+  let stair = 0;
+  if (head.x < 0) {
+    head.x = COLS - 1;
+    if (head.z > 1) { head.z -= 1; stair = -1; ensureLayer(head.z, head); }
+    else wrapped = true;
+  } else if (head.x >= COLS) {
+    head.x = 0;
+    head.z += 1;
+    stair = 1;
+    ensureLayer(head.z, head);
+  }
   if (head.y < 0) { head.y = ROWS - 1; wrapped = true; }
   if (head.y >= ROWS) { head.y = 0; wrapped = true; }
-  if (wrapped) showHint('wrap', '穿墙:从对侧出来,不会死');
+  if (wrapped) showHint('wrap', '上下穿墙:从对侧出来,不会死');
+  if (stair !== 0) {
+    showHint('stairs', '左右边缘是楼梯:右升左降!');
+    if (mode === 'timed') {
+      timedEndsAt = Math.max(timedEndsAt - 5000, Date.now() + 1000);
+      showToast('换层 -5 秒');
+    }
+  }
 
   const eatsHere = layers[head.z].fruits.some(f => f.x === head.x && f.y === head.y);
   const body = eatsHere ? old : old.slice(0, -1);
@@ -616,6 +635,7 @@ function drawBook() {
 
 function draw() {
   const z = snake[0].z;
+  ensureLayer(z);
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -905,9 +925,13 @@ document.addEventListener('keydown', e => {
 });
 
 function tick() {
-  if (!started) demoStep();
-  step();
-  let speed = Number(speedInput.value) - Math.min(100, score * 5);
+  try {
+    if (!started) demoStep();
+    step();
+  } catch (e) {
+    showToast('游戏异常已自愈');
+  }
+  let speed = Number(speedInput.value) - Math.min(60, score * 3);
   if (Date.now() < fastUntil) speed -= 60;
   if (Date.now() < slowUntil) speed += 60;
   speed = Math.max(50, Math.min(600, speed));
