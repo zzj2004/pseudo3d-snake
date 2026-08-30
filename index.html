@@ -47,6 +47,7 @@
     <button id="restartBtn">重新开始</button>
     <button id="modeBtn">模式:无尽</button>
     <button id="soundBtn">音效:关</button>
+    <button id="bookBtn">图鉴</button>
     <label for="speed">速度:</label>
     <input type="range" id="speed" min="80" max="300" step="10" value="150">
     <span id="speedLabel">150ms</span>
@@ -69,6 +70,10 @@ const pauseBtn = document.getElementById('pauseBtn');
 const startBtn = document.getElementById('startBtn');
 const restartBtn = document.getElementById('restartBtn');
 pauseBtn.addEventListener('click', () => {
+  if (bookOpen) {
+    bookOpen = false;
+    return;
+  }
   if (started && !cleared && !settled) togglePause();
 });
 startBtn.addEventListener('click', () => {
@@ -93,6 +98,15 @@ soundBtn.addEventListener('click', () => {
     ensureAudio();
     playSound('eat', 'normal');
   }
+});
+const bookBtn = document.getElementById('bookBtn');
+bookBtn.addEventListener('click', () => {
+  if (bookOpen) {
+    bookOpen = false;
+    return;
+  }
+  if (started && !paused && !cleared && !settled) togglePause();
+  bookOpen = true;
 });
 function togglePause() {
   paused = !paused;
@@ -128,6 +142,7 @@ modeBtn.addEventListener('click', () => {
 
 let started = false;
 let paused = false;
+let bookOpen = false;
 let cleared = false;
 let settled = false;
 let settleReason = '';
@@ -557,6 +572,48 @@ function playSound(name, type) {
   }
 }
 
+function drawBook() {
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('果子图鉴 · 吃过才点亮', canvas.width / 2, 40);
+  ctx.font = '12px sans-serif';
+  ctx.fillText('再点图鉴按钮或按空格关闭', canvas.width / 2, 62);
+  ctx.font = '13px sans-serif';
+  const types = Object.keys(FRUIT_STYLES);
+  const perCol = Math.ceil(types.length / 2);
+  for (let i = 0; i < types.length; i++) {
+    const t = types[i];
+    const x = 32 + Math.floor(i / perCol) * 186;
+    const y = 92 + (i % perCol) * 30;
+    ctx.textAlign = 'left';
+    if (save.book[t]) {
+      fillFruitShape(t, x, y - 11, 14);
+      ctx.fillStyle = '#000';
+      const count = save.stats.fruits[t] || 0;
+      ctx.fillText(FRUIT_DESC[t] + ' ×' + count, x + 22, y);
+    } else {
+      ctx.fillStyle = '#eee';
+      ctx.strokeStyle = '#ccc';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x, y - 13, 18, 18, 4);
+      else ctx.rect(x, y - 13, 18, 18);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#999';
+      ctx.font = 'bold 15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('?', x + 9, y);
+      ctx.font = '13px sans-serif';
+      ctx.textAlign = 'left';
+    }
+  }
+  ctx.textAlign = 'left';
+}
+
 function draw() {
   const z = snake[0].z;
   ctx.fillStyle = '#fff';
@@ -726,7 +783,9 @@ function draw() {
     }
   }
 
-  if (settled) {
+  if (bookOpen) {
+    drawBook();
+  } else if (settled) {
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#000';
@@ -781,23 +840,7 @@ function draw() {
     ctx.font = '13px sans-serif';
     ctx.fillText('按空格或点击暂停按钮继续', canvas.width / 2, 68);
     ctx.fillText(MODE_NAMES[mode] + '模式最高分: ' + save.best[mode] + '   爬层: 升 ' + save.stats.climbs + ' / 降 ' + save.stats.descents, canvas.width / 2, 92);
-    ctx.font = 'bold 15px sans-serif';
-    ctx.fillText('果子图鉴(吃过点亮)', canvas.width / 2, 120);
-    ctx.font = '13px sans-serif';
-    const types = Object.keys(FRUIT_STYLES);
-    const perCol = Math.ceil(types.length / 2);
-    for (let i = 0; i < types.length; i++) {
-      const t = types[i];
-      const x = 32 + Math.floor(i / perCol) * 186;
-      const y = 144 + (i % perCol) * 26;
-      ctx.globalAlpha = save.book[t] ? 1 : 0.35;
-      fillFruitShape(t, x, y - 11, 14);
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = save.book[t] ? '#000' : '#999';
-      const count = save.stats.fruits[t] || 0;
-      ctx.textAlign = 'left';
-      ctx.fillText(save.book[t] ? FRUIT_DESC[t] + ' ×' + count : '未尝出…', x + 22, y);
-    }
+    ctx.fillText('点"图鉴"按钮查看果子图鉴', canvas.width / 2, 116);
     ctx.textAlign = 'left';
   }
 }
@@ -828,6 +871,7 @@ function reset() {
   layers = {};
   ensureLayer(1);
   paused = false;
+  bookOpen = false;
   cleared = false;
   pauseBtn.textContent = '暂停';
 }
@@ -837,6 +881,10 @@ document.addEventListener('keydown', e => {
 
   if (e.code === 'Space') {
     e.preventDefault();
+    if (bookOpen) {
+      bookOpen = false;
+      return;
+    }
     if (started && !cleared && !settled) togglePause();
     return;
   }
