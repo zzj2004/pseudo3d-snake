@@ -930,7 +930,7 @@ function tick() {
     console.error('tick error:', e);
     showToast('游戏异常已自愈');
   }
-  let speed = Number(speedInput.value) - Math.min(60, score * 3);
+  let speed = Number(speedInput.value) - Math.min(100, score * 5) - Math.min(40, (snake[0].z - 1) * 8);
   if (Date.now() < fastUntil) speed -= 60;
   if (Date.now() < slowUntil) speed += 60;
   speed = Math.max(50, Math.min(600, speed));
