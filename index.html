@@ -353,21 +353,19 @@ function step() {
 
   const old = snake.map(s => ({x: s.x, y: s.y, z: s.z}));
   const head = {x: old[0].x + dir.x, y: old[0].y + dir.y, z: old[0].z};
-  let wrapped = false;
   let stair = 0;
   if (head.x < 0) {
     head.x = COLS - 1;
     if (head.z > 1) { head.z -= 1; stair = -1; ensureLayer(head.z, head); }
-    else wrapped = true;
+    else showHint('wrapLeft', '左边缘环绕:从右侧出来,不会死');
   } else if (head.x >= COLS) {
     head.x = 0;
     head.z += 1;
     stair = 1;
     ensureLayer(head.z, head);
   }
-  if (head.y < 0) { head.y = ROWS - 1; wrapped = true; }
-  if (head.y >= ROWS) { head.y = 0; wrapped = true; }
-  if (wrapped) showHint('wrap', '上下穿墙:从对侧出来,不会死');
+  if (head.y < 0) { head.y = ROWS - 1; showHint('wrapTop', '上边缘环绕:从下侧出来,不会死'); }
+  if (head.y >= ROWS) { head.y = 0; showHint('wrapBottom', '下边缘环绕:从上侧出来,不会死'); }
   if (stair !== 0) {
     showHint('stairs', '左右边缘是楼梯:右升左降!');
     if (mode === 'timed') {
@@ -929,6 +927,7 @@ function tick() {
     if (!started) demoStep();
     step();
   } catch (e) {
+    console.error('tick error:', e);
     showToast('游戏异常已自愈');
   }
   let speed = Number(speedInput.value) - Math.min(60, score * 3);
