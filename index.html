@@ -60,6 +60,7 @@
     <button id="modeBtn">模式:无尽</button>
     <button id="soundBtn">音效:关</button>
     <button id="bookBtn">图鉴</button>
+    <button id="achBtn">成就</button>
     <button id="skinBtn">皮肤:经典</button>
     <label for="speed">速度:</label>
     <input type="range" id="speed" min="80" max="300" step="10" value="150">
@@ -91,9 +92,14 @@ speedInput.addEventListener('input', () => {
 const pauseBtn = document.getElementById('pauseBtn');
 const startBtn = document.getElementById('startBtn');
 const restartBtn = document.getElementById('restartBtn');
+const achBtn = document.getElementById('achBtn');
 pauseBtn.addEventListener('click', () => {
   if (bookOpen) {
     bookOpen = false;
+    return;
+  }
+  if (achOpen) {
+    achOpen = false;
     return;
   }
   if (started && !cleared && !settled) togglePause();
@@ -127,8 +133,24 @@ bookBtn.addEventListener('click', () => {
     bookOpen = false;
     return;
   }
+  if (achOpen) {
+    achOpen = false;
+    return;
+  }
   if (started && !paused && !cleared && !settled) togglePause();
   bookOpen = true;
+});
+achBtn.addEventListener('click', () => {
+  if (achOpen) {
+    achOpen = false;
+    return;
+  }
+  if (bookOpen) {
+    bookOpen = false;
+    return;
+  }
+  if (started && !paused && !cleared && !settled) togglePause();
+  achOpen = true;
 });
 function togglePause() {
   paused = !paused;
@@ -165,6 +187,7 @@ modeBtn.addEventListener('click', () => {
 let started = false;
 let paused = false;
 let bookOpen = false;
+let achOpen = false;
 let cleared = false;
 let settled = false;
 let settleReason = '';
@@ -186,6 +209,7 @@ let comboUntil = 0;
 let shield = 0;
 let magnetUntil = 0;
 let freezeUntil = 0;
+let maxZRun = 1;
 let toastMsg = null;
 const hintsShown = {};
 let keyBuf = '';
@@ -232,8 +256,27 @@ const BOOK_SHORT = {
   shield: '挡 1 次伤害,可叠 2', magnet: '吸果 8 秒(含炸弹)', freeze: '陷阱失效 8 秒', harvest: '本层果子翻倍',
   rainbow: '随机效果·稀有', bomb: '扣 1 命,躲开!'
 };
+const ACH = [
+  {id: 'first_climb', name: '初次登楼', desc: '首次爬上一层'},
+  {id: 'tower10', name: '十层高塔', desc: '单局到达第 10 层'},
+  {id: 'stairs_down', name: '下楼也要排队', desc: '首次从楼梯降层'},
+  {id: 'score100', name: '百分俱乐部', desc: '单局得分达到 100'},
+  {id: 'score500', name: '五百分斩', desc: '单局得分达到 500'},
+  {id: 'combo16', name: '连击高手', desc: '单局连击达到 16'},
+  {id: 'combo32', name: '连击传说', desc: '单局连击达到 32'},
+  {id: 'gate1', name: '破门者', desc: '首次开启 Boss 层大门'},
+  {id: 'gate3', name: '开门大盗', desc: '累计开启 3 扇大门'},
+  {id: 'fruit100', name: '干饭蛇', desc: '累计吃果 100 个'},
+  {id: 'fruit500', name: '暴食者', desc: '累计吃果 500 个'},
+  {id: 'book10', name: '图鉴入门', desc: '点亮 10 种果子'},
+  {id: 'book20', name: '图鉴大师', desc: '点亮全部 20 种果子'},
+  {id: 'four_new', name: '新时代', desc: '护盾/磁铁/冰霜/丰收各吃 1 个'},
+  {id: 'gold_life', name: '富贵命长', desc: '金果回命累计 10 次'},
+  {id: 'skin_secret', name: '时装设计师', desc: '解锁任意隐藏皮肤'},
+  {id: 'clear999', name: '不可能的任务', desc: '达成 999999999 通关'}
+];
 function defaultSave() {
-  return {v: 2, best: {endless: 0, survival: 0, timed: 0}, sound: false, stats: {climbs: 0, descents: 0, fruits: {}}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic'};
+  return {v: 2, best: {endless: 0, survival: 0, timed: 0}, sound: false, stats: {climbs: 0, descents: 0, fruits: {}, gates: 0, goldLives: 0, maxCombo: 0}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic', ach: {}};
 }
 function loadSave() {
   try {
@@ -260,9 +303,13 @@ function loadSave() {
       stats: {
         climbs: Number(s.stats.climbs) || 0,
         descents: Number(s.stats.descents) || 0,
+        gates: Number(s.stats.gates) || 0,
+        goldLives: Number(s.stats.goldLives) || 0,
+        maxCombo: Number(s.stats.maxCombo) || 0,
         fruits: (s.stats.fruits && typeof s.stats.fruits === 'object') ? s.stats.fruits : {}
       },
       book: (s.book && typeof s.book === 'object') ? s.book : {},
+      ach: (s.ach && typeof s.ach === 'object') ? s.ach : {},
       skins: {
         bamboo: !!(s.skins && s.skins.bamboo),
         cyber: !!(s.skins && s.skins.cyber)
@@ -528,11 +575,17 @@ function step() {
       if (pulled) eat(pulled, snake[0].z);
     } while (pulled && Date.now() < magnetUntil && !settled);
   }
+
+  if (snake[0].z > maxZRun) {
+    maxZRun = snake[0].z;
+    checkAch();
+  }
 }
 
 function eat(f, z, eff) {
   if (eff === undefined) eff = f.type;
   combo++;
+  if (combo > (save.stats.maxCombo || 0)) save.stats.maxCombo = combo;
   comboUntil = Date.now() + 20000;
   const cm = 1 + Math.min(4, Math.floor(combo / 8));
   if (combo === 8 || combo === 16 || combo === 24 || combo === 32) showToast('连击 ×' + combo + '!分数 ×' + cm + '!');
@@ -544,6 +597,7 @@ function eat(f, z, eff) {
   if (f.type === 'gold') {
     if (lives < 3) {
       lives++;
+      save.stats.goldLives = (save.stats.goldLives || 0) + 1;
       showToast('+' + gain + ' 分!金果回命,剩 ' + lives + ' 命');
     } else {
       showToast('+' + gain + ' 分!');
@@ -566,6 +620,7 @@ function eat(f, z, eff) {
     gate.eaten++;
     if (gate.eaten >= gate.needed) {
       gate.open = true;
+      save.stats.gates = (save.stats.gates || 0) + 1;
       showToast('大门开启!右边缘恢复升层!');
       playSound('climb');
     } else {
@@ -646,6 +701,7 @@ function eat(f, z, eff) {
     playSound('bomb');
   } else if (f.type === 'reverse') playSound('reverse');
   else if (f.type !== 'up' && f.type !== 'down') playSound('eat', f.type);
+  checkAch();
 }
 
 function loseLife(msg) {
@@ -780,6 +836,9 @@ function playSound(name, type) {
   } else if (name === 'block') {
     tone(523, 0, 0.08, 'square', 0.1);
     tone(784, 0.07, 0.12, 'square', 0.1);
+  } else if (name === 'ach') {
+    tone(660, 0, 0.1, 'triangle', 0.12);
+    tone(880, 0.09, 0.16, 'triangle', 0.12);
   } else if (name === 'settle') {
     tone(659, 0, 0.16, 'triangle', 0.12);
     tone(523, 0.15, 0.16, 'triangle', 0.12);
@@ -854,6 +913,72 @@ function drawBook() {
   ctx.textAlign = 'center';
   ctx.fillText('累计吃果 ' + totFruits + ' 个 · 升层 ' + save.stats.climbs + ' / 降层 ' + save.stats.descents, canvas.width / 2, 388);
   ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+}
+
+function checkAch() {
+  const st = save.stats;
+  const tot = Object.values(st.fruits).reduce((a, b) => a + b, 0);
+  const book = FRUIT_ORDER.filter(e => save.book[e[1]]).length;
+  const cond = {
+    first_climb: st.climbs >= 1,
+    tower10: maxZRun >= 10,
+    stairs_down: st.descents >= 1,
+    score100: score >= 100,
+    score500: score >= 500,
+    combo16: (st.maxCombo || 0) >= 16,
+    combo32: (st.maxCombo || 0) >= 32,
+    gate1: (st.gates || 0) >= 1,
+    gate3: (st.gates || 0) >= 3,
+    fruit100: tot >= 100,
+    fruit500: tot >= 500,
+    book10: book >= 10,
+    book20: book >= 20,
+    four_new: ['shield', 'magnet', 'freeze', 'harvest'].every(t => (st.fruits[t] || 0) >= 1),
+    gold_life: (st.goldLives || 0) >= 10,
+    skin_secret: save.skins.bamboo || save.skins.cyber,
+    clear999: score >= 999999999
+  };
+  for (const a of ACH) {
+    if (cond[a.id] && !save.ach[a.id]) {
+      save.ach[a.id] = true;
+      persist();
+      showToast('🏆 成就解锁:' + a.name);
+      playSound('ach');
+    }
+  }
+}
+
+function drawAch() {
+  ctx.fillStyle = SK.overlay;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const got = ACH.filter(a => save.ach[a.id]).length;
+  ctx.fillStyle = SK.text;
+  ctx.font = 'bold 18px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('成就 · 已解锁 ' + got + '/' + ACH.length, canvas.width / 2, 34);
+  ctx.font = '11px sans-serif';
+  ctx.globalAlpha = 0.6;
+  ctx.fillText('空格或再点按钮关闭', canvas.width / 2, 56);
+  ctx.globalAlpha = 1;
+  ctx.font = '12px sans-serif';
+  ctx.textAlign = 'left';
+  let y = 82;
+  for (const a of ACH) {
+    if (save.ach[a.id]) {
+      ctx.fillStyle = SK.glow ? '#59c9ff' : '#2a7';
+      ctx.fillText('✓', 22, y);
+      ctx.fillStyle = SK.text;
+      ctx.fillText(a.name + ':' + a.desc, 40, y);
+    } else {
+      ctx.fillStyle = SK.text;
+      ctx.globalAlpha = 0.35;
+      ctx.fillText('·', 22, y);
+      ctx.fillText(a.name + ':' + a.desc, 40, y);
+      ctx.globalAlpha = 1;
+    }
+    y += 18.5;
+  }
   ctx.textAlign = 'left';
 }
 
@@ -1100,6 +1225,8 @@ function draw() {
 
   if (bookOpen) {
     drawBook();
+  } else if (achOpen) {
+    drawAch();
   } else if (settled) {
     ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1188,6 +1315,7 @@ function reset() {
   shield = 0;
   magnetUntil = 0;
   freezeUntil = 0;
+  maxZRun = 1;
   layers = {};
   ensureLayer(1);
   paused = false;
@@ -1205,11 +1333,13 @@ document.addEventListener('keydown', e => {
       save.skins.bamboo = true;
       persist();
       showToast('隐藏皮肤解锁:翠玉竹林!');
+      checkAch();
     }
     if (keyBuf.includes('2077') && !save.skins.cyber) {
       save.skins.cyber = true;
       persist();
       showToast('隐藏皮肤解锁:赛博2077!');
+      checkAch();
     }
   }
 
@@ -1217,6 +1347,10 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     if (bookOpen) {
       bookOpen = false;
+      return;
+    }
+    if (achOpen) {
+      achOpen = false;
       return;
     }
     if (started && !cleared && !settled) togglePause();
