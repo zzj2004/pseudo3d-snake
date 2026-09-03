@@ -48,6 +48,7 @@
     <button id="modeBtn">模式:无尽</button>
     <button id="soundBtn">音效:关</button>
     <button id="bookBtn">图鉴</button>
+    <button id="skinBtn">皮肤:经典</button>
     <label for="speed">速度:</label>
     <input type="range" id="speed" min="80" max="300" step="10" value="150">
     <span id="speedLabel">150ms</span>
@@ -163,6 +164,7 @@ let combo = 0;
 let comboUntil = 0;
 let toastMsg = null;
 const hintsShown = {};
+let keyBuf = '';
 
 function showToast(text) {
   toastMsg = {text: text, at: Date.now()};
@@ -174,6 +176,11 @@ function showHint(key, text) {
 }
 
 const SAVE_KEY = 'snake3d_save';
+const SKINS = {
+  classic: {name: '经典', bg: '#eee', board: '#fff', border: '#000', text: '#000', overlay: 'rgba(255,255,255,0.92)', snake: '#000', head: '#000', tongue: '#d00', wallFill: '#fff', wallFrame: '#000', wallHatch: '#bbb', trapPit: '#222', trapSpike: '#aaa', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
+  bamboo: {name: '翠玉竹林', bg: '#dce8d2', board: '#eef7ea', border: '#4e7d46', text: '#2b4a26', overlay: 'rgba(238,247,234,0.92)', snake: '#2e8b4e', head: '#1f6e3c', tongue: '#e0453a', wallFill: '#f8fcf4', wallFrame: '#4e7d46', wallHatch: '#b9d0ae', trapPit: '#2a3d24', trapSpike: '#8fae7f', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
+  cyber: {name: '赛博2077', bg: '#04060d', board: '#0a0e1a', border: '#00e5ff', text: '#d8f6ff', overlay: 'rgba(6,10,20,0.88)', snake: '#00e5ff', head: '#7df9ff', tongue: '#ff2d95', wallFill: '#0e1c2e', wallFrame: '#1d5b74', wallHatch: '#16455a', trapPit: '#14263e', trapSpike: '#6fa8c9', fastCol: '#4dff9d', slowCol: '#5db8ff', dblCol: '#ffc04d', ghostCol: '#9aa8b8', comboCol: '#ffb300', glow: true}
+};
 const FRUIT_DESC = {
   normal: '普通 +1 分', fast: '加速 6 秒', slow: '减速 6 秒', grow: '蛇身 +3',
   shrink: '蛇身 -2', reverse: '方向反转 8 秒', up: '升上一层', down: '降下一层',
@@ -182,7 +189,7 @@ const FRUIT_DESC = {
   double: '双倍分 10 秒', ghost: '隐身 5 秒穿身', scissors: '蛇身减半'
 };
 function defaultSave() {
-  return {v: 2, best: {endless: 0, survival: 0, timed: 0}, sound: false, stats: {climbs: 0, descents: 0, fruits: {}}, book: {}};
+  return {v: 2, best: {endless: 0, survival: 0, timed: 0}, sound: false, stats: {climbs: 0, descents: 0, fruits: {}}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic'};
 }
 function loadSave() {
   try {
@@ -211,7 +218,12 @@ function loadSave() {
         descents: Number(s.stats.descents) || 0,
         fruits: (s.stats.fruits && typeof s.stats.fruits === 'object') ? s.stats.fruits : {}
       },
-      book: (s.book && typeof s.book === 'object') ? s.book : {}
+      book: (s.book && typeof s.book === 'object') ? s.book : {},
+      skins: {
+        bamboo: !!(s.skins && s.skins.bamboo),
+        cyber: !!(s.skins && s.skins.cyber)
+      },
+      skin: (typeof s.skin === 'string' && SKINS[s.skin]) ? s.skin : 'classic'
     };
   } catch (e) {
     return defaultSave();
@@ -226,6 +238,27 @@ const save = loadSave();
 
 let soundOn = save.sound;
 soundBtn.textContent = soundOn ? '音效:开' : '音效:关';
+const skinBtn = document.getElementById('skinBtn');
+const controlsDiv = document.querySelector('.controls');
+function applySkin() {
+  const k = (typeof save.skin === 'string' && SKINS[save.skin]) ? save.skin : 'classic';
+  save.skin = k;
+  const s = SKINS[k];
+  document.body.style.background = s.bg;
+  canvas.style.borderColor = s.border;
+  controlsDiv.style.color = s.text;
+  skinBtn.textContent = '皮肤:' + s.name;
+}
+skinBtn.addEventListener('click', () => {
+  const owned = ['classic'];
+  if (save.skins.bamboo) owned.push('bamboo');
+  if (save.skins.cyber) owned.push('cyber');
+  save.skin = owned[(owned.indexOf(save.skin) + 1) % owned.length];
+  applySkin();
+  persist();
+  showToast('皮肤:' + SKINS[save.skin].name);
+});
+applySkin();
 let audioCtx = null;
 const FRUIT_PITCH = {
   normal: 440, fast: 587, slow: 349, grow: 494,
@@ -572,15 +605,17 @@ function fillFruitShape(type, px, py, size) {
   }
 }
 
+let SK = SKINS.classic;
+
 function drawWall(x, y) {
   const px = x * GRID;
   const py = y * GRID;
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = SK.wallFill;
   ctx.fillRect(px, py, GRID, GRID);
-  ctx.strokeStyle = '#000';
+  ctx.strokeStyle = SK.wallFrame;
   ctx.lineWidth = 2;
   ctx.strokeRect(px + 3, py + 3, GRID - 6, GRID - 6);
-  ctx.strokeStyle = '#bbb';
+  ctx.strokeStyle = SK.wallHatch;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(px + 5, py + GRID - 5);
@@ -593,9 +628,9 @@ function drawWall(x, y) {
 function drawTrap(x, y) {
   const px = x * GRID;
   const py = y * GRID;
-  ctx.fillStyle = '#222';
+  ctx.fillStyle = SK.trapPit;
   ctx.fillRect(px + 1, py + 1, GRID - 2, GRID - 2);
-  ctx.fillStyle = '#aaa';
+  ctx.fillStyle = SK.trapSpike;
   for (let i = 0; i < 3; i++) {
     const sx = px + 4 + i * 5;
     ctx.beginPath();
@@ -655,9 +690,9 @@ function playSound(name, type) {
 }
 
 function drawBook() {
-  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.fillStyle = SK.overlay;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#000';
+  ctx.fillStyle = SK.text;
   ctx.font = 'bold 20px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('果子图鉴 · 吃过才点亮', canvas.width / 2, 40);
@@ -673,7 +708,7 @@ function drawBook() {
     ctx.textAlign = 'left';
     if (save.book[t]) {
       fillFruitShape(t, x, y - 11, 14);
-      ctx.fillStyle = '#000';
+      ctx.fillStyle = SK.text;
       const count = save.stats.fruits[t] || 0;
       ctx.fillText(FRUIT_DESC[t] + ' ×' + count, x + 22, y);
     } else {
@@ -699,7 +734,8 @@ function drawBook() {
 function draw() {
   const z = snake[0].z;
   ensureLayer(z);
-  ctx.fillStyle = '#fff';
+  SK = SKINS[save.skin] || SKINS.classic;
+  ctx.fillStyle = SK.board;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.globalAlpha = 0.15;
@@ -728,7 +764,7 @@ function draw() {
   const blink = Date.now() < invincibleUntil && Math.floor(Date.now() / 120) % 2 === 0;
   const ghosting = Date.now() < ghostUntil;
   ctx.globalAlpha = blink ? 0.25 : (ghosting ? 0.45 : 1);
-  ctx.fillStyle = '#000';
+  ctx.fillStyle = SK.snake;
   for (let i = 0; i + 1 < onLayer.length; i++) {
     const a = onLayer[i], b = onLayer[i + 1];
     if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) !== 1) continue;
@@ -762,11 +798,27 @@ function draw() {
   const px = -dir.y * 4;
   const py = dir.x * 4;
   ctx.globalAlpha = blink ? 0.25 : (ghosting ? 0.45 : 1);
-  ctx.fillStyle = '#000';
+  ctx.fillStyle = SK.head;
   ctx.beginPath();
   ctx.arc(cx, cy, 9.5, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = '#d00';
+  if (SK.glow) {
+    ctx.save();
+    ctx.globalAlpha *= 0.22;
+    ctx.fillStyle = SK.snake;
+    for (let i = 0; i < onLayer.length; i++) {
+      const s = onLayer[i];
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(s.x * GRID - 2, s.y * GRID - 2, GRID + 4, GRID + 4, 7);
+      else ctx.rect(s.x * GRID - 2, s.y * GRID - 2, GRID + 4, GRID + 4);
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(cx, cy, 12.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.strokeStyle = SK.tongue;
   ctx.lineWidth = 2;
   ctx.beginPath();
   const tx = cx + dir.x * 15;
@@ -790,14 +842,14 @@ function draw() {
     fillFruitShape(f.type, f.x * GRID, f.y * GRID, GRID);
   }
 
-  ctx.fillStyle = '#000';
+  ctx.fillStyle = SK.text;
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'left';
   ctx.fillText('得分: ' + score + '  第' + z + '层', 10, 20);
 
   if (combo > 0 && started && !cleared && !settled) {
     const cm = 1 + Math.min(4, Math.floor(combo / 8));
-    ctx.fillStyle = '#c60';
+    ctx.fillStyle = SK.comboCol;
     ctx.font = 'bold 14px sans-serif';
     ctx.fillText('连击 ×' + combo + (cm > 1 ? '  分数×' + cm : ''), 10, 40);
   }
@@ -806,13 +858,13 @@ function draw() {
     const left = Math.max(0, timedEndsAt - Date.now());
     const mm = Math.floor(left / 60000);
     const ss = Math.floor(left % 60000 / 1000);
-    ctx.fillStyle = left <= 10000 ? '#d00' : '#000';
+    ctx.fillStyle = left <= 10000 ? '#d00' : SK.text;
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('剩余 ' + mm + ':' + (ss < 10 ? '0' : '') + ss, canvas.width / 2, 20);
   }
   if (started && !settled) {
-    ctx.fillStyle = Date.now() < invincibleUntil ? '#a00' : '#000';
+    ctx.fillStyle = Date.now() < invincibleUntil ? (SK.glow ? '#ff5c7a' : '#a00') : SK.text;
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'right';
     ctx.fillText('命 ×' + lives, canvas.width - 10, 20);
@@ -841,24 +893,24 @@ function draw() {
   const now = Date.now();
   let buffY = combo > 0 ? 58 : 40;
   if (now < fastUntil) {
-    ctx.fillStyle = '#0a0';
+    ctx.fillStyle = SK.fastCol;
     ctx.font = 'bold 13px sans-serif';
     ctx.fillText('加速 ' + Math.ceil((fastUntil - now) / 1000) + 's', 10, buffY);
     buffY += 18;
   } else if (now < slowUntil) {
-    ctx.fillStyle = '#06c';
+    ctx.fillStyle = SK.slowCol;
     ctx.font = 'bold 13px sans-serif';
     ctx.fillText('减速 ' + Math.ceil((slowUntil - now) / 1000) + 's', 10, buffY);
     buffY += 18;
   }
   if (now < doubleUntil) {
-    ctx.fillStyle = '#b80';
+    ctx.fillStyle = SK.dblCol;
     ctx.font = 'bold 13px sans-serif';
     ctx.fillText('双倍分 ' + Math.ceil((doubleUntil - now) / 1000) + 's', 10, buffY);
     buffY += 18;
   }
   if (now < ghostUntil) {
-    ctx.fillStyle = '#888';
+    ctx.fillStyle = SK.ghostCol;
     ctx.font = 'bold 13px sans-serif';
     ctx.fillText('隐身 ' + Math.ceil((ghostUntil - now) / 1000) + 's', 10, buffY);
   }
@@ -877,11 +929,13 @@ function draw() {
     const k = 1 - t / 500;
     ctx.fillStyle = 'rgba(255,255,255,' + (0.45 * k).toFixed(3) + ')';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'rgba(0,0,0,' + k.toFixed(3) + ')';
+    ctx.globalAlpha = k;
+    ctx.fillStyle = SK.text;
     ctx.font = 'bold 26px sans-serif';
     ctx.textAlign = 'center';
     const bounce = Math.round(-18 * Math.sin((1 - k) * Math.PI));
     ctx.fillText((layerChangeDir > 0 ? '↑ 进入第 ' : '↓ 回到第 ') + z + ' 层', canvas.width / 2, canvas.height / 2 + bounce);
+    ctx.globalAlpha = 1;
   }
 
   if (toastMsg) {
@@ -889,7 +943,7 @@ function draw() {
     if (age < 1000) {
       const k = Math.min(1, age / 150, (1000 - age) / 250);
       ctx.globalAlpha = k;
-      ctx.fillStyle = '#000';
+      ctx.fillStyle = SK.text;
       ctx.font = 'bold 15px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(toastMsg.text, canvas.width / 2, 44);
@@ -901,9 +955,9 @@ function draw() {
   if (bookOpen) {
     drawBook();
   } else if (settled) {
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = SK.text;
     ctx.font = 'bold 28px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(settleReason === 'dead' ? '命用完了!' : '时间到!', canvas.width / 2, canvas.height / 2 - 40);
@@ -912,9 +966,9 @@ function draw() {
     ctx.fillText(score > bestAtStart ? '新纪录!' : '最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 18);
     ctx.fillText('点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 46);
   } else if (cleared) {
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = SK.text;
     ctx.font = 'bold 28px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('通关!', canvas.width / 2, canvas.height / 2 - 20);
@@ -923,10 +977,10 @@ function draw() {
     ctx.fillText('最高分: ' + save.best.endless, canvas.width / 2, canvas.height / 2 + 32);
     ctx.fillText('点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 54);
   } else if (!started) {
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.globalAlpha = 0.3;
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = SK.snake;
     for (const s of demoSnake) {
       ctx.beginPath();
       if (ctx.roundRect) {
@@ -937,7 +991,7 @@ function draw() {
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = SK.text;
     ctx.font = 'bold 24px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('贪吃蛇', canvas.width / 2, canvas.height / 2 - 34);
@@ -946,9 +1000,9 @@ function draw() {
     ctx.fillText('最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 20);
     ctx.fillText('点击开始按钮开始游戏', canvas.width / 2, canvas.height / 2 + 44);
   } else if (paused) {
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = SK.text;
     ctx.font = 'bold 22px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('暂停中', canvas.width / 2, 46);
@@ -995,6 +1049,20 @@ function reset() {
 
 document.addEventListener('keydown', e => {
   if (e.isComposing) return;
+
+  if (/^[a-z0-9]$/i.test(e.key)) {
+    keyBuf = (keyBuf + e.key.toLowerCase()).slice(-8);
+    if (keyBuf.includes('zhu') && !save.skins.bamboo) {
+      save.skins.bamboo = true;
+      persist();
+      showToast('隐藏皮肤解锁:翠玉竹林!');
+    }
+    if (keyBuf.includes('2077') && !save.skins.cyber) {
+      save.skins.cyber = true;
+      persist();
+      showToast('隐藏皮肤解锁:赛博2077!');
+    }
+  }
 
   if (e.code === 'Space') {
     e.preventDefault();
