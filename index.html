@@ -16,6 +16,17 @@
     background: #fff;
     border: 2px solid #000;
   }
+  #shadowCv {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    pointer-events: none;
+    background: transparent;
+    border: none;
+  }
   .wrap {
     display: flex;
     flex-direction: column;
@@ -39,6 +50,7 @@
 </style>
 </head>
 <body>
+<canvas id="shadowCv"></canvas>
 <div class="wrap">
   <canvas id="game" width="400" height="400"></canvas>
   <div class="controls">
@@ -57,6 +69,15 @@
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+const shadowCv = document.getElementById('shadowCv');
+const sctx = shadowCv.getContext('2d');
+function resizeShadow() {
+  shadowCv.width = window.innerWidth;
+  shadowCv.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeShadow);
+resizeShadow();
+
 const GRID = 20;
 const COLS = canvas.width / GRID;
 const ROWS = canvas.height / GRID;
@@ -1105,7 +1126,51 @@ function tick() {
 }
 tick();
 
+function shadowBlob(x, y, pad) {
+  sctx.beginPath();
+  if (sctx.roundRect) sctx.roundRect(x - pad, y - pad, GRID - 4 + pad * 2, GRID - 4 + pad * 2, 5 + pad);
+  else sctx.rect(x - pad, y - pad, GRID - 4 + pad * 2, GRID - 4 + pad * 2);
+  sctx.fill();
+}
+
+function drawShadow() {
+  const w = shadowCv.width;
+  const h = shadowCv.height;
+  sctx.setTransform(1, 0, 0, 1, 0, 0);
+  sctx.clearRect(0, 0, w, h);
+  const S = Math.max(w, h) / (COLS * GRID);
+  sctx.translate((w - COLS * GRID * S) / 2, (h - ROWS * GRID * S) / 2);
+  sctx.scale(S, S);
+  const src = started ? snake : demoSnake;
+  const z = src[0].z;
+  sctx.fillStyle = SK.snake;
+  for (const s of src) {
+    if (s.z !== z) continue;
+    const bx = s.x * GRID + 2;
+    const by = s.y * GRID + 2;
+    sctx.globalAlpha = SK.glow ? 0.018 : 0.03;
+    shadowBlob(bx, by, 16);
+    sctx.globalAlpha = SK.glow ? 0.03 : 0.045;
+    shadowBlob(bx, by, 7);
+    sctx.globalAlpha = SK.glow ? 0.05 : 0.07;
+    shadowBlob(bx, by, 0);
+  }
+  const lay = layers[z];
+  if (lay) {
+    for (const f of lay.fruits) {
+      sctx.fillStyle = FRUIT_STYLES[f.type];
+      sctx.globalAlpha = SK.glow ? 0.015 : 0.025;
+      sctx.fillRect(f.x * GRID - 5, f.y * GRID - 5, GRID + 8, GRID + 8);
+      sctx.globalAlpha = SK.glow ? 0.04 : 0.055;
+      sctx.fillRect(f.x * GRID + 1, f.y * GRID + 1, GRID - 2, GRID - 2);
+    }
+  }
+  sctx.globalAlpha = 1;
+  sctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
 function frame() {
+  drawShadow();
   draw();
   requestAnimationFrame(frame);
 }
