@@ -355,16 +355,18 @@ function ensureLayer(z, avoid) {
 }
 function fruitPool(z) {
   const pool = z >= 2 ? BASE_POOL.concat(['up', 'down']) : BASE_POOL.slice();
-  pool.push('bomb', 'bomb');
-  if (z >= 3) pool.push('bomb');
-  if (z >= 6) pool.push('bomb');
-  if (mode === 'survival') pool.push('bomb');
+  if (z >= 2) {
+    pool.push('bomb', 'bomb');
+    if (z >= 5) pool.push('bomb');
+    if (z >= 9) pool.push('bomb');
+    if (mode === 'survival' && z >= 5) pool.push('bomb');
+  }
   const bonus = Math.min(3, Math.floor((z - 1) / 3));
   for (let i = 0; i < bonus; i++) pool.push('gold', 'rainbow');
   return pool;
 }
-function randomFruit(z, avoid, noUp) {
-  const pool = fruitPool(z).filter(t => !noUp || t !== 'up');
+function randomFruit(z, avoid, noDanger) {
+  const pool = fruitPool(z).filter(t => !noDanger || (t !== 'up' && t !== 'bomb'));
   const fruits = layers[z].fruits;
   let p;
   do {
@@ -502,7 +504,14 @@ function eat(f, z, eff) {
   if (f.type === 'gold') gain += 50 * mult * cm;
   const prevScore = score;
   score += gain;
-  if (f.type === 'gold') showToast('+' + gain + ' 分!');
+  if (f.type === 'gold') {
+    if (lives < 3) {
+      lives++;
+      showToast('+' + gain + ' 分!金果回命,剩 ' + lives + ' 命');
+    } else {
+      showToast('+' + gain + ' 分!');
+    }
+  }
   if (Math.floor(score / 100) > Math.floor(prevScore / 100)) showToast(score + ' 分!');
   if (score >= 999999999 && mode === 'endless') {
     cleared = true;
@@ -1118,10 +1127,10 @@ function tick() {
     console.error('tick error:', e);
     showToast('游戏异常已自愈');
   }
-  let speed = Number(speedInput.value) - Math.min(100, score * 5) - Math.min(40, (snake[0].z - 1) * 8);
+  let speed = Number(speedInput.value) - Math.min(80, score * 2) - Math.min(32, (snake[0].z - 1) * 4);
   if (Date.now() < fastUntil) speed -= 60;
   if (Date.now() < slowUntil) speed += 60;
-  speed = Math.max(50, Math.min(600, speed));
+  speed = Math.max(75, Math.min(600, speed));
   setTimeout(tick, speed);
 }
 tick();
