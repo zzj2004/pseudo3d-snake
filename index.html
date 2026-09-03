@@ -289,7 +289,7 @@ const RAINBOW_POOL = ['normal','fast','slow','grow','shrink','reverse','up','dow
 let layers = {};
 function ensureLayer(z, avoid) {
   if (!layers[z]) {
-    layers[z] = {fruits: [], walls: [], traps: []};
+    layers[z] = {fruits: [], walls: [], traps: [], gate: (z > 0 && z % 10 === 0) ? {needed: 3, eaten: 0, open: false} : null};
     for (let i = 0; i < 3; i++) layers[z].fruits.push(randomFruit(z, avoid, true));
     if (z >= 2) {
       const count = 4 + Math.floor(Math.random() * 4) + Math.min(4, Math.floor((z - 1) / 2));
@@ -370,9 +370,14 @@ function step() {
     else showHint('wrapLeft', '左边缘环绕:从右侧出来,不会死');
   } else if (head.x >= COLS) {
     head.x = 0;
-    head.z += 1;
-    stair = 1;
-    ensureLayer(head.z, head);
+    const cur = layers[old[0].z];
+    if (cur.gate && !cur.gate.open) {
+      showToast('大门锁定:吃果 ' + cur.gate.eaten + '/' + cur.gate.needed + ' 开右梯');
+    } else {
+      head.z += 1;
+      stair = 1;
+      ensureLayer(head.z, head);
+    }
   }
   if (head.y < 0) { head.y = ROWS - 1; showHint('wrapTop', '上边缘环绕:从下侧出来,不会死'); }
   if (head.y >= ROWS) { head.y = 0; showHint('wrapBottom', '下边缘环绕:从上侧出来,不会死'); }
@@ -455,6 +460,18 @@ function eat(f, z, eff) {
   persist();
   layers[z].fruits = layers[z].fruits.filter(x => x !== f);
   layers[z].fruits.push(randomFruit(z));
+
+  const gate = layers[z].gate;
+  if (gate && !gate.open && f.type !== 'bomb') {
+    gate.eaten++;
+    if (gate.eaten >= gate.needed) {
+      gate.open = true;
+      showToast('大门开启!右边缘恢复升层!');
+      playSound('climb');
+    } else {
+      showToast('大门进度 ' + gate.eaten + '/' + gate.needed);
+    }
+  }
 
   const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0, up: 0, down: 0, rainbow: 0, gold: 0, teleport: 0, clock: 0, bomb: 0, double: 0, ghost: 0, scissors: 0}[eff];
   if (grow > 0) {
@@ -800,6 +817,24 @@ function draw() {
     ctx.textAlign = 'right';
     ctx.fillText('命 ×' + lives, canvas.width - 10, 20);
     ctx.textAlign = 'left';
+  }
+  const gate = layers[z].gate;
+  if (gate && started && !settled) {
+    ctx.fillStyle = gate.open ? '#1a1' : '#c33';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(gate.open ? '大门已开启' : '大门 ' + gate.eaten + '/' + gate.needed, canvas.width - 10, 64);
+    ctx.textAlign = 'left';
+    const gx = canvas.width - GRID + 3;
+    const gy = canvas.height / 2 - GRID / 2 + 2;
+    ctx.fillStyle = gate.open
+      ? 'rgba(40,180,80,' + (0.55 + 0.45 * Math.abs(Math.sin(Date.now() / 250))).toFixed(3) + ')'
+      : '#3a3f4a';
+    ctx.fillRect(gx, gy, GRID - 6, GRID - 4);
+    if (!gate.open) {
+      ctx.fillStyle = '#c33';
+      ctx.fillRect(gx, gy + (GRID - 4) / 2 - 2, GRID - 6, 4);
+    }
   }
   ctx.textAlign = 'left';
 
