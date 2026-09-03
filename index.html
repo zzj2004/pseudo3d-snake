@@ -183,6 +183,9 @@ let layerChangeAt = 0;
 let layerChangeDir = 0;
 let combo = 0;
 let comboUntil = 0;
+let shield = 0;
+let magnetUntil = 0;
+let freezeUntil = 0;
 let toastMsg = null;
 const hintsShown = {};
 let keyBuf = '';
@@ -207,7 +210,27 @@ const FRUIT_DESC = {
   shrink: '蛇身 -2', reverse: '方向反转 8 秒', up: '升上一层', down: '降下一层',
   rainbow: '随机一种效果', gold: '+50 分不变长', teleport: '传送到本层空格',
   clock: '重置速度效果', bomb: '炸弹 扣 1 命',
-  double: '双倍分 10 秒', ghost: '隐身 5 秒穿身', scissors: '蛇身减半'
+  double: '双倍分 10 秒', ghost: '隐身 5 秒穿身', scissors: '蛇身减半',
+  shield: '护盾:抵挡一次伤害(最多 2 层)', magnet: '磁铁 8 秒:2 格内果子自动入口(炸弹也会!)',
+  freeze: '冰霜 8 秒:陷阱失效', harvest: '丰收:本层果子翻倍(至多 9 个)'
+};
+const FRUIT_ORDER = [
+  ['分数', 'normal'], [null, 'gold'], [null, 'double'],
+  ['身体', 'grow'], [null, 'shrink'], [null, 'scissors'],
+  ['速度', 'fast'], [null, 'slow'], [null, 'clock'],
+  ['层数', 'up'], [null, 'down'],
+  ['功能', 'teleport'], [null, 'reverse'], [null, 'ghost'], [null, 'shield'], [null, 'magnet'], [null, 'freeze'], [null, 'harvest'],
+  ['稀有', 'rainbow'],
+  ['危险', 'bomb']
+];
+const BOOK_SHORT = {
+  normal: '+1 分 +1 节', gold: '+51 分/残血回命', double: '双倍分 10 秒',
+  grow: '+3 节', shrink: '-2 节', scissors: '蛇身减半',
+  fast: '加速 6 秒', slow: '减速 6 秒', clock: '重置快慢',
+  up: '升一层', down: '降一层',
+  teleport: '本层传送', reverse: '反转 8 秒', ghost: '穿身 5 秒',
+  shield: '挡 1 次伤害,可叠 2', magnet: '吸果 8 秒(含炸弹)', freeze: '陷阱失效 8 秒', harvest: '本层果子翻倍',
+  rainbow: '随机效果·稀有', bomb: '扣 1 命,躲开!'
 };
 function defaultSave() {
   return {v: 2, best: {endless: 0, survival: 0, timed: 0}, sound: false, stats: {climbs: 0, descents: 0, fruits: {}}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic'};
@@ -285,7 +308,8 @@ const FRUIT_PITCH = {
   normal: 440, fast: 587, slow: 349, grow: 494,
   shrink: 330, reverse: 294, up: 659, down: 262,
   rainbow: 622, gold: 880, teleport: 220, clock: 392, bomb: 110,
-  double: 988, ghost: 698, scissors: 175
+  double: 988, ghost: 698, scissors: 175,
+  shield: 831, magnet: 415, freeze: 554, harvest: 932
 };
 
 let snake = [
@@ -335,9 +359,13 @@ const FRUIT_STYLES = {
   bomb:    '#a00',
   double:  '#ccc',
   ghost:   'rgba(120,120,120,0.5)',
-  scissors:'#860'
+  scissors:'#860',
+  shield:  '#09f',
+  magnet:  '#90f',
+  freeze:  '#6cf',
+  harvest: '#9f0'
 };
-const BASE_POOL = ['normal','normal','normal','normal','fast','slow','grow','shrink','reverse','rainbow','gold','teleport','clock','double','ghost','scissors'];
+const BASE_POOL = ['normal','normal','normal','normal','fast','slow','grow','shrink','reverse','rainbow','gold','teleport','clock','double','ghost','scissors','shield','magnet','freeze','harvest'];
 const RAINBOW_POOL = ['normal','fast','slow','grow','shrink','reverse','up','down'];
 
 let layers = {};
@@ -484,12 +512,21 @@ function step() {
     persist();
   }
 
-  if (Date.now() >= invincibleUntil) {
+  if (Date.now() >= invincibleUntil && Date.now() >= freezeUntil) {
     const lay = layers[snake[0].z];
     if (lay.traps.some(t => t.x === snake[0].x && t.y === snake[0].y)) {
       loseLife('踩中陷阱');
       playSound('bomb');
     }
+  }
+
+  if (Date.now() < magnetUntil && !settled) {
+    const layM = layers[snake[0].z];
+    let pulled;
+    do {
+      pulled = layM.fruits.find(f => Math.abs(f.x - snake[0].x) <= 2 && Math.abs(f.y - snake[0].y) <= 2);
+      if (pulled) eat(pulled, snake[0].z);
+    } while (pulled && Date.now() < magnetUntil && !settled);
   }
 }
 
@@ -536,7 +573,7 @@ function eat(f, z, eff) {
     }
   }
 
-  const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0, up: 0, down: 0, rainbow: 0, gold: 0, teleport: 0, clock: 0, bomb: 0, double: 0, ghost: 0, scissors: 0}[eff];
+  const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0, up: 0, down: 0, rainbow: 0, gold: 0, teleport: 0, clock: 0, bomb: 0, double: 0, ghost: 0, scissors: 0, shield: 0, magnet: 0, freeze: 0, harvest: 0}[eff];
   if (grow > 0) {
     const tail = snake[snake.length - 1];
     for (let i = 0; i < grow; i++) snake.push({x: tail.x, y: tail.y, z: tail.z});
@@ -557,6 +594,32 @@ function eat(f, z, eff) {
   if (eff === 'grow') showHint('grow', '蛇身 +3');
   if (eff === 'shrink') showHint('shrink', '蛇身 -2');
   if (eff === 'reverse') { reverseUntil = Date.now() + 8000; showHint('reverse', '方向反转 8 秒!'); }
+  if (f.type === 'shield') { shield = Math.min(2, shield + 1); showHint('shield', '护盾 +1!可抵挡一次伤害'); }
+  if (f.type === 'magnet') { magnetUntil = Date.now() + 8000; showHint('magnet', '磁铁 8 秒!附近果子自动入口'); }
+  if (f.type === 'freeze') { freezeUntil = Date.now() + 8000; showHint('freeze', '冰霜 8 秒!陷阱失效'); }
+  if (f.type === 'harvest') {
+    const cur = layers[z].fruits.slice();
+    const extra = [];
+    for (const q of cur) {
+      if (layers[z].fruits.length + extra.length >= 9) break;
+      let p = null;
+      for (let r = 1; r <= 3 && !p; r++) {
+        const cand = [[q.x + r, q.y], [q.x - r, q.y], [q.x, q.y + r], [q.x, q.y - r], [q.x + r, q.y + r], [q.x - r, q.y - r], [q.x + r, q.y - r], [q.x - r, q.y + r]];
+        for (const c of cand) {
+          const nx = c[0], ny = c[1];
+          if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) continue;
+          if (layers[z].fruits.some(o => o.x === nx && o.y === ny) || extra.some(o => o.x === nx && o.y === ny)) continue;
+          if (layers[z].walls.some(o => o.x === nx && o.y === ny) || layers[z].traps.some(o => o.x === nx && o.y === ny)) continue;
+          if (snake.some(s => s.z === z && s.x === nx && s.y === ny)) continue;
+          p = {x: nx, y: ny, type: q.type};
+          break;
+        }
+      }
+      if (p) extra.push(p);
+    }
+    layers[z].fruits.push(...extra);
+    showToast('丰收!本层果子翻倍');
+  }
   if (f.type === 'teleport') {
     const z2 = snake[0].z;
     let p;
@@ -586,6 +649,13 @@ function eat(f, z, eff) {
 }
 
 function loseLife(msg) {
+  if (shield > 0) {
+    shield--;
+    invincibleUntil = Date.now() + 1000;
+    showToast('护盾抵挡了伤害!');
+    playSound('block');
+    return;
+  }
   combo = 0;
   comboUntil = 0;
   lives--;
@@ -620,7 +690,7 @@ function fillFruitShape(type, px, py, size) {
     ctx.fillStyle = FRUIT_STYLES[type];
   }
   ctx.fillRect(px, py, size, size);
-  if (type === 'bomb') {
+  if (type === 'bomb' || type === 'shield') {
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2;
     ctx.strokeRect(px + 1, py + 1, size - 2, size - 2);
@@ -628,7 +698,7 @@ function fillFruitShape(type, px, py, size) {
     ctx.strokeStyle = 'rgba(246,190,0,' + (0.4 + 0.6 * Math.abs(Math.sin(Date.now() / 200))).toFixed(3) + ')';
     ctx.lineWidth = 2;
     ctx.strokeRect(px + 1, py + 1, size - 2, size - 2);
-  } else if (type === 'rainbow' || type === 'clock' || type === 'ghost') {
+  } else if (type === 'rainbow' || type === 'clock' || type === 'ghost' || type === 'magnet' || type === 'freeze') {
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1;
     ctx.strokeRect(px + 0.5, py + 0.5, size - 1, size - 1);
@@ -707,6 +777,9 @@ function playSound(name, type) {
     tone(180, 0, 0.2, 'sine', 0.12, 720);
   } else if (name === 'bomb') {
     tone(150, 0, 0.22, 'square', 0.1, 55);
+  } else if (name === 'block') {
+    tone(523, 0, 0.08, 'square', 0.1);
+    tone(784, 0.07, 0.12, 'square', 0.1);
   } else if (name === 'settle') {
     tone(659, 0, 0.16, 'triangle', 0.12);
     tone(523, 0.15, 0.16, 'triangle', 0.12);
@@ -722,42 +795,65 @@ function playSound(name, type) {
 function drawBook() {
   ctx.fillStyle = SK.overlay;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const total = FRUIT_ORDER.length;
+  const got = FRUIT_ORDER.filter(e => save.book[e[1]]).length;
   ctx.fillStyle = SK.text;
-  ctx.font = 'bold 20px sans-serif';
+  ctx.font = 'bold 18px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('果子图鉴 · 吃过才点亮', canvas.width / 2, 40);
+  ctx.fillText('果子图鉴 · 已点亮 ' + got + '/' + total, canvas.width / 2, 34);
+  ctx.fillStyle = 'rgba(128,128,128,0.35)';
+  ctx.fillRect(70, 46, 260, 8);
+  ctx.fillStyle = got === total ? '#fd0' : '#4a4';
+  ctx.fillRect(70, 46, Math.round(260 * got / total), 8);
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = SK.text;
+  ctx.globalAlpha = 0.6;
+  ctx.fillText('空格或再点按钮关闭', canvas.width / 2, 70);
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
   ctx.font = '12px sans-serif';
-  ctx.fillText('再点图鉴按钮或按空格关闭', canvas.width / 2, 62);
-  ctx.font = '13px sans-serif';
-  const types = Object.keys(FRUIT_STYLES);
-  const perCol = Math.ceil(types.length / 2);
-  for (let i = 0; i < types.length; i++) {
-    const t = types[i];
-    const x = 32 + Math.floor(i / perCol) * 186;
-    const y = 92 + (i % perCol) * 30;
-    ctx.textAlign = 'left';
+  const colX = [16, 202];
+  let col = 0;
+  let y = 104;
+  for (const entry of FRUIT_ORDER) {
+    const t = entry[1];
+    if (y > 360) {
+      col++;
+      y = 104;
+    }
+    const x = colX[col];
+    const label = entry[0] ? '「' + entry[0] + '」' : '';
     if (save.book[t]) {
       fillFruitShape(t, x, y - 11, 14);
       ctx.fillStyle = SK.text;
-      const count = save.stats.fruits[t] || 0;
-      ctx.fillText(FRUIT_DESC[t] + ' ×' + count, x + 22, y);
+      ctx.fillText(label + BOOK_SHORT[t] + ' ×' + (save.stats.fruits[t] || 0), x + 20, y);
     } else {
-      ctx.fillStyle = '#eee';
-      ctx.strokeStyle = '#ccc';
+      ctx.fillStyle = 'rgba(128,128,128,0.18)';
+      ctx.strokeStyle = 'rgba(128,128,128,0.4)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(x, y - 13, 18, 18, 4);
-      else ctx.rect(x, y - 13, 18, 18);
+      if (ctx.roundRect) ctx.roundRect(x, y - 13, 16, 16, 4);
+      else ctx.rect(x, y - 13, 16, 16);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = '#999';
-      ctx.font = 'bold 15px sans-serif';
+      ctx.fillStyle = 'rgba(128,128,128,0.7)';
+      ctx.font = 'bold 12px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('?', x + 9, y);
-      ctx.font = '13px sans-serif';
+      ctx.fillText('?', x + 8, y);
       ctx.textAlign = 'left';
+      ctx.font = '12px sans-serif';
+      ctx.fillStyle = 'rgba(128,128,128,0.55)';
+      ctx.fillText(label + '???', x + 20, y);
     }
+    y += 27;
   }
+  const totFruits = Object.values(save.stats.fruits).reduce((a, b) => a + b, 0);
+  ctx.fillStyle = SK.text;
+  ctx.globalAlpha = 0.7;
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('累计吃果 ' + totFruits + ' 个 · 升层 ' + save.stats.climbs + ' / 降层 ' + save.stats.descents, canvas.width / 2, 388);
+  ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
 
@@ -784,7 +880,9 @@ function draw() {
     drawWall(w.x, w.y);
   }
   for (const t of layers[z].traps) {
+    if (Date.now() < freezeUntil) ctx.globalAlpha = 0.25;
     drawTrap(t.x, t.y);
+    ctx.globalAlpha = 1;
   }
 
   const INSET = 3;
@@ -922,6 +1020,24 @@ function draw() {
 
   const now = Date.now();
   let buffY = combo > 0 ? 58 : 40;
+  if (shield > 0) {
+    ctx.fillStyle = SK.glow ? '#59c9ff' : '#09f';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('护盾 ×' + shield, 10, buffY);
+    buffY += 18;
+  }
+  if (now < magnetUntil) {
+    ctx.fillStyle = SK.glow ? '#b48cff' : '#90f';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('磁铁 ' + Math.ceil((magnetUntil - now) / 1000) + 's', 10, buffY);
+    buffY += 18;
+  }
+  if (now < freezeUntil) {
+    ctx.fillStyle = SK.glow ? '#8fd8ff' : '#6cf';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('陷阱失效 ' + Math.ceil((freezeUntil - now) / 1000) + 's', 10, buffY);
+    buffY += 18;
+  }
   if (now < fastUntil) {
     ctx.fillStyle = SK.fastCol;
     ctx.font = 'bold 13px sans-serif';
@@ -1069,6 +1185,9 @@ function reset() {
   reverseUntil = 0;
   combo = 0;
   comboUntil = 0;
+  shield = 0;
+  magnetUntil = 0;
+  freezeUntil = 0;
   layers = {};
   ensureLayer(1);
   paused = false;
