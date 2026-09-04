@@ -61,6 +61,7 @@
     <button id="soundBtn">音效:关</button>
     <button id="bookBtn">图鉴</button>
     <button id="achBtn">成就</button>
+    <button id="shareBtn">分享</button>
     <button id="skinBtn">皮肤:经典</button>
     <label for="speed">速度:</label>
     <input type="range" id="speed" min="80" max="300" step="10" value="150">
@@ -385,6 +386,30 @@ skinBtn.addEventListener('click', () => {
 });
 applySkin();
 if (isHoliday()) showHint('holiday', '节日快乐!今天金果更常见');
+const shareBtn = document.getElementById('shareBtn');
+shareBtn.addEventListener('click', () => {
+  const daily = save.best.daily || 0;
+  const text = '【贪吃蛇·伪三维爬层】我的' + MODE_NAMES[mode] + '模式最高 ' + (save.best[mode] || 0) + ' 分' +
+    (daily > 0 ? ',今日每日挑战 ' + daily + ' 分' : '') +
+    '。六种模式+20种果子+隐藏皮肤,来超越我!免费开玩:https://github.com/zzj2004/pseudo3d-snake';
+  let ok = false;
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+  } catch (e) {}
+  if (!ok && navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => showToast('战绩已复制,去发给朋友!'), () => showToast('复制失败,手动截图也行!'));
+    return;
+  }
+  showToast(ok ? '战绩已复制,去发给朋友!' : '复制失败,手动截图也行!');
+});
 let audioCtx = null;
 const FRUIT_PITCH = {
   normal: 440, fast: 587, slow: 349, grow: 494,
