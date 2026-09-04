@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>贪吃蛇</title>
 <style>
   body {
@@ -35,10 +36,13 @@
   }
   .controls {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     align-items: center;
     gap: 8px;
     font-size: 14px;
     color: #000;
+    max-width: 96vw;
   }
   .controls button {
     padding: 4px 14px;
@@ -47,12 +51,39 @@
     background: #fff;
     cursor: pointer;
   }
+  #dpad {
+    display: none;
+    grid-template-columns: repeat(3, 64px);
+    grid-template-rows: repeat(2, 64px);
+    gap: 10px;
+    margin-top: 2px;
+  }
+  #dpad .dp {
+    font-size: 26px;
+    line-height: 1;
+    padding: 0;
+    border: 2px solid #555;
+    background: rgba(255,255,255,0.85);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #dpad .dp[data-dir="up"] { grid-column: 2; grid-row: 1; }
+  #dpad .dp[data-dir="left"] { grid-column: 1; grid-row: 2; }
+  #dpad .dp[data-dir="down"] { grid-column: 2; grid-row: 2; }
+  #dpad .dp[data-dir="right"] { grid-column: 3; grid-row: 2; }
 </style>
 </head>
 <body>
 <canvas id="shadowCv"></canvas>
 <div class="wrap">
   <canvas id="game" width="400" height="400"></canvas>
+  <div id="dpad">
+    <button class="dp" data-dir="up">↑</button>
+    <button class="dp" data-dir="left">←</button>
+    <button class="dp" data-dir="down">↓</button>
+    <button class="dp" data-dir="right">→</button>
+  </div>
   <div class="controls">
     <button id="startBtn">开始</button>
     <button id="pauseBtn">暂停</button>
@@ -75,7 +106,10 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const COLS = 20;
 const ROWS = 20;
-const SIZE = Math.max(400, Math.min(640, Math.floor(Math.min(window.innerWidth * 0.55, window.innerHeight * 0.68) / COLS) * COLS));
+const narrow = window.innerWidth < 700;
+const SIZE = narrow
+  ? Math.max(200, Math.floor((window.innerWidth - 12) / COLS) * COLS)
+  : Math.max(400, Math.min(640, Math.floor(Math.min(window.innerWidth * 0.55, window.innerHeight * 0.68) / COLS) * COLS));
 canvas.width = SIZE;
 canvas.height = SIZE;
 const GRID = SIZE / COLS;
@@ -489,6 +523,21 @@ bgmBtn.addEventListener('click', () => {
   if (bgmOn) bgmStart(); else bgmStop();
 });
 if (bgmOn) bgmBtn.textContent = '音乐:开';
+const dpadEl = document.getElementById('dpad');
+function updateDpad() {
+  dpadEl.style.display = window.innerWidth < 700 ? 'grid' : 'none';
+}
+window.addEventListener('resize', updateDpad);
+updateDpad();
+const DP_MAP = {up: {x: 0, y: -1}, down: {x: 0, y: 1}, left: {x: -1, y: 0}, right: {x: 1, y: 0}};
+dpadEl.querySelectorAll('.dp').forEach(b => {
+  b.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (!started || cleared || settled) return;
+    const d = DP_MAP[b.dataset.dir];
+    if (d) applyDir(d);
+  });
+});
 let audioCtx = null;
 const FRUIT_PITCH = {
   normal: 440, fast: 587, slow: 349, grow: 494,
@@ -1625,6 +1674,11 @@ function reset() {
   pauseBtn.textContent = '暂停';
 }
 
+function applyDir(d) {
+  if (controlsReversed()) d = {x: -d.x, y: -d.y};
+  if (d.x !== -dir.x || d.y !== -dir.y) nextDir = d;
+}
+
 document.addEventListener('keydown', e => {
   if (e.isComposing) return;
 
@@ -1685,8 +1739,7 @@ document.addEventListener('keydown', e => {
   let d = keyMap[e.code];
   if (!d) return;
   e.preventDefault();
-  if (controlsReversed()) d = {x: -d.x, y: -d.y};
-  if (d.x !== -dir.x || d.y !== -dir.y) nextDir = d;
+  applyDir(d);
 });
 
 function tick() {
