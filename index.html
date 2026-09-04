@@ -162,13 +162,14 @@ function togglePause() {
 }
 
 const modeBtn = document.getElementById('modeBtn');
-const MODE_NAMES = {endless: '无尽', survival: '有命', timed: '限时', daily: '每日', fog: '迷雾'};
+const MODE_NAMES = {endless: '无尽', survival: '有命', timed: '限时', daily: '每日', fog: '迷雾', zen: '禅'};
 const MODE_DESC = {
   endless: '无尽模式:经典玩法,小心炸弹与陷阱',
   survival: '有命模式:3 条命,小心炸弹与陷阱',
   timed: '限时模式:180 秒冲高分,小心炸弹与陷阱',
   daily: '每日挑战:固定种子,大家同一张图比高分',
-  fog: '迷雾模式:雾里探路,蛇头周围才可见'
+  fog: '迷雾模式:雾里探路,蛇头周围才可见',
+  zen: '禅模式:没有炸弹与陷阱,纯享爬层'
 };
 let mode = 'endless';
 let rand = Math.random;
@@ -185,6 +186,11 @@ function dailySeed() {
   const d = new Date();
   return (d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()) | 0;
 }
+function isHoliday() {
+  const d = new Date();
+  const md = (d.getMonth() + 1) * 100 + d.getDate();
+  return md === 101 || md === 111 || md === 501 || (md >= 1001 && md <= 1007);
+}
 function applyModeBtn() {
   modeBtn.textContent = '模式:' + MODE_NAMES[mode];
 }
@@ -194,7 +200,7 @@ modeBtn.addEventListener('click', () => {
     showToast('本局结束后可切换模式');
     return;
   }
-  const order = ['endless', 'survival', 'timed', 'daily', 'fog'];
+  const order = ['endless', 'survival', 'timed', 'daily', 'fog', 'zen'];
   mode = order[(order.indexOf(mode) + 1) % 3];
   applyModeBtn();
   reset();
@@ -226,6 +232,15 @@ let shield = 0;
 let magnetUntil = 0;
 let freezeUntil = 0;
 let maxZRun = 1;
+let ghostRun = [];
+let stepCount = 0;
+let konamiBuf = [];
+let konamiUsed = false;
+let bestGhost = null;
+try {
+  bestGhost = JSON.parse(localStorage.getItem('snake3d_ghost_endless') || 'null');
+} catch (e) {}
+if (!bestGhost || !Array.isArray(bestGhost.path) || !bestGhost.path.length) bestGhost = null;
 let toastMsg = null;
 const hintsShown = {};
 let keyBuf = '';
@@ -292,7 +307,7 @@ const ACH = [
   {id: 'clear999', name: '不可能的任务', desc: '达成 999999999 通关'}
 ];
 function defaultSave() {
-  return {v: 2, best: {endless: 0, survival: 0, timed: 0, daily: 0, fog: 0}, sound: false, stats: {climbs: 0, descents: 0, fruits: {}, gates: 0, goldLives: 0, maxCombo: 0}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic', ach: {}};
+  return {v: 2, best: {endless: 0, survival: 0, timed: 0, daily: 0, fog: 0, zen: 0}, sound: false, stats: {climbs: 0, descents: 0, fruits: {}, gates: 0, goldLives: 0, maxCombo: 0}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic', ach: {}};
 }
 function loadSave() {
   try {
@@ -307,10 +322,11 @@ function loadSave() {
         survival: Number(s.best.survival) || 0,
         timed: Number(s.best.timed) || 0,
         daily: Number(s.best.daily) || 0,
-        fog: Number(s.best.fog) || 0
+        fog: Number(s.best.fog) || 0,
+        zen: Number(s.best.zen) || 0
       };
     } else if (s.v === 1) {
-      best = {endless: Number(s.best) || 0, survival: 0, timed: 0, daily: 0, fog: 0};
+      best = {endless: Number(s.best) || 0, survival: 0, timed: 0, daily: 0, fog: 0, zen: 0};
     } else {
       return defaultSave();
     }
@@ -368,6 +384,7 @@ skinBtn.addEventListener('click', () => {
   showToast('皮肤:' + SKINS[save.skin].name);
 });
 applySkin();
+if (isHoliday()) showHint('holiday', '节日快乐!今天金果更常见');
 let audioCtx = null;
 const FRUIT_PITCH = {
   normal: 440, fast: 587, slow: 349, grow: 494,
@@ -441,19 +458,22 @@ function ensureLayer(z, avoid) {
     if (z >= 2) {
       const count = 4 + Math.floor(rand() * 4) + Math.min(4, Math.floor((z - 1) / 2));
       for (let i = 0; i < count; i++) layers[z].walls.push(randomWall(z, avoid));
-      const tcount = 1 + Math.min(2, Math.floor((z - 1) / 3));
-      for (let i = 0; i < tcount; i++) layers[z].traps.push(randomWall(z, avoid));
+      if (mode !== 'zen') {
+        const tcount = 1 + Math.min(2, Math.floor((z - 1) / 3));
+        for (let i = 0; i < tcount; i++) layers[z].traps.push(randomWall(z, avoid));
+      }
     }
   }
 }
 function fruitPool(z) {
   const pool = z >= 2 ? BASE_POOL.concat(['up', 'down']) : BASE_POOL.slice();
-  if (z >= 2) {
+  if (z >= 2 && mode !== 'zen') {
     pool.push('bomb', 'bomb');
     if (z >= 5) pool.push('bomb');
     if (z >= 9) pool.push('bomb');
     if (mode === 'survival' && z >= 5) pool.push('bomb');
   }
+  if (isHoliday()) pool.push('gold', 'gold');
   const bonus = Math.min(3, Math.floor((z - 1) / 3));
   for (let i = 0; i < bonus; i++) pool.push('gold', 'rainbow');
   return pool;
@@ -598,6 +618,9 @@ function step() {
     maxZRun = snake[0].z;
     checkAch();
   }
+
+  if (ghostRun.length < 8000) ghostRun.push([snake[0].x, snake[0].y, snake[0].z]);
+  stepCount++;
 }
 
 function eat(f, z, eff) {
@@ -744,6 +767,14 @@ function loseLife(msg) {
 function settle(reason) {
   settled = true;
   settleReason = reason;
+  if (mode === 'endless' && score > 0 && ghostRun.length > 30 &&
+      (!bestGhost || score > bestGhost.score)) {
+    bestGhost = {score: score, path: ghostRun.slice(0, 8000)};
+    try {
+      localStorage.setItem('snake3d_ghost_endless', JSON.stringify(bestGhost));
+    } catch (e) {}
+    showToast('新影子诞生!下次它会陪你跑');
+  }
   playSound('settle');
   persist();
 }
@@ -1029,6 +1060,24 @@ function draw() {
     if (Date.now() < freezeUntil) ctx.globalAlpha = 0.25;
     drawTrap(t.x, t.y);
     ctx.globalAlpha = 1;
+  }
+
+  if (mode === 'endless' && started && !settled && bestGhost && stepCount > 0) {
+    const gi = Math.min(stepCount, bestGhost.path.length - 1);
+    const gh = bestGhost.path[gi];
+    if (gh[2] === z) {
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = SK.glow ? '#9aa8b8' : '#555';
+      for (let i = Math.max(0, gi - 5); i <= gi; i++) {
+        const gp = bestGhost.path[i];
+        if (gp[2] !== z) continue;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(gp[0] * GRID + 3, gp[1] * GRID + 3, GRID - 6, GRID - 6, 4);
+        else ctx.rect(gp[0] * GRID + 3, gp[1] * GRID + 3, GRID - 6, GRID - 6);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
   }
 
   const INSET = 3;
@@ -1354,6 +1403,9 @@ function reset() {
   magnetUntil = 0;
   freezeUntil = 0;
   maxZRun = 1;
+  ghostRun = [];
+  stepCount = 0;
+  konamiUsed = false;
   layers = {};
   ensureLayer(1);
   paused = false;
@@ -1378,6 +1430,18 @@ document.addEventListener('keydown', e => {
       persist();
       showToast('隐藏皮肤解锁:赛博2077!');
       checkAch();
+    }
+  }
+
+  konamiBuf.push(e.code);
+  if (konamiBuf.length > 10) konamiBuf.shift();
+  if (konamiBuf.join(',') === 'ArrowUp,ArrowUp,ArrowDown,ArrowDown,ArrowLeft,ArrowLeft,ArrowRight,ArrowRight,KeyB,KeyA') {
+    konamiBuf = [];
+    if (started && !settled && !konamiUsed) {
+      konamiUsed = true;
+      shield = 2;
+      showToast('秘技发现:护盾拉满!');
+      playSound('ach');
     }
   }
 
