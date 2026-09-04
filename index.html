@@ -71,6 +71,13 @@
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+const COLS = 20;
+const ROWS = 20;
+const SIZE = Math.max(400, Math.min(640, Math.floor(Math.min(window.innerWidth * 0.55, window.innerHeight * 0.68) / COLS) * COLS));
+canvas.width = SIZE;
+canvas.height = SIZE;
+const GRID = SIZE / COLS;
+const PX = SIZE / 400;
 const shadowCv = document.getElementById('shadowCv');
 const sctx = shadowCv.getContext('2d');
 function resizeShadow() {
@@ -79,10 +86,6 @@ function resizeShadow() {
 }
 window.addEventListener('resize', resizeShadow);
 resizeShadow();
-
-const GRID = 20;
-const COLS = canvas.width / GRID;
-const ROWS = canvas.height / GRID;
 
 const speedInput = document.getElementById('speed');
 const speedLabel = document.getElementById('speedLabel');
@@ -302,10 +305,14 @@ const ACH = [
   {id: 'fruit500', name: '暴食者', desc: '累计吃果 500 个'},
   {id: 'book10', name: '图鉴入门', desc: '点亮 10 种果子'},
   {id: 'book20', name: '图鉴大师', desc: '点亮全部 20 种果子'},
-  {id: 'four_new', name: '新时代', desc: '护盾/磁铁/冰霜/丰收各吃 1 个'},
+  {id: 'four_new', name: '新时代', desc: '四新果各吃 1 个'},
   {id: 'gold_life', name: '富贵命长', desc: '金果回命累计 10 次'},
   {id: 'skin_secret', name: '时装设计师', desc: '解锁任意隐藏皮肤'},
-  {id: 'clear999', name: '不可能的任务', desc: '达成 999999999 通关'}
+  {id: 'clear999', name: '不可能的任务', desc: '通关 999999999 分'},
+  {id: 'daily50', name: '每日打卡', desc: '每日挑战得分达到 50'},
+  {id: 'fog5', name: '雾中行者', desc: '迷雾模式到达第 5 层'},
+  {id: 'zen20', name: '禅心已久', desc: '禅模式到达第 20 层'},
+  {id: 'ghost_pass', name: '超越影子', desc: '无尽分数超过影子纪录'}
 ];
 function defaultSave() {
   return {v: 2, best: {endless: 0, survival: 0, timed: 0, daily: 0, fog: 0, zen: 0}, sound: false, stats: {climbs: 0, descents: 0, fruits: {}, gates: 0, goldLives: 0, maxCombo: 0}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic', ach: {}};
@@ -643,6 +650,10 @@ function step() {
     maxZRun = snake[0].z;
     checkAch();
   }
+  if (mode === 'endless' && bestGhost && stepCount === bestGhost.path.length) {
+    showToast('影子已到它的终点,而你还在飞!');
+    playSound('ach');
+  }
 
   if (ghostRun.length < 8000) ghostRun.push([snake[0].x, snake[0].y, snake[0].z]);
   stepCount++;
@@ -823,15 +834,15 @@ function fillFruitShape(type, px, py, size) {
   if (type === 'bomb' || type === 'shield') {
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2;
-    ctx.strokeRect(px + 1, py + 1, size - 2, size - 2);
+    ctx.strokeRect(px + 1 * PX, py + 1 * PX, size - 2 * PX, size - 2 * PX);
   } else if (type === 'double') {
     ctx.strokeStyle = 'rgba(246,190,0,' + (0.4 + 0.6 * Math.abs(Math.sin(Date.now() / 200))).toFixed(3) + ')';
     ctx.lineWidth = 2;
-    ctx.strokeRect(px + 1, py + 1, size - 2, size - 2);
+    ctx.strokeRect(px + 1 * PX, py + 1 * PX, size - 2 * PX, size - 2 * PX);
   } else if (type === 'rainbow' || type === 'clock' || type === 'ghost' || type === 'magnet' || type === 'freeze') {
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1;
-    ctx.strokeRect(px + 0.5, py + 0.5, size - 1, size - 1);
+    ctx.strokeRect(px + 0.5 * PX, py + 0.5 * PX, size - 1 * PX, size - 1 * PX);
   }
 }
 
@@ -844,14 +855,14 @@ function drawWall(x, y) {
   ctx.fillRect(px, py, GRID, GRID);
   ctx.strokeStyle = SK.wallFrame;
   ctx.lineWidth = 2;
-  ctx.strokeRect(px + 3, py + 3, GRID - 6, GRID - 6);
+  ctx.strokeRect(px + 3 * PX, py + 3 * PX, GRID - 6 * PX, GRID - 6 * PX);
   ctx.strokeStyle = SK.wallHatch;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(px + 5, py + GRID - 5);
-  ctx.lineTo(px + GRID - 5, py + 5);
-  ctx.moveTo(px + 5, py + 5);
-  ctx.lineTo(px + GRID - 5, py + GRID - 5);
+  ctx.moveTo(px + 5 * PX, py + GRID - 5 * PX);
+  ctx.lineTo(px + GRID - 5 * PX, py + 5 * PX);
+  ctx.moveTo(px + 5 * PX, py + 5 * PX);
+  ctx.lineTo(px + GRID - 5 * PX, py + GRID - 5 * PX);
   ctx.stroke();
 }
 
@@ -859,14 +870,14 @@ function drawTrap(x, y) {
   const px = x * GRID;
   const py = y * GRID;
   ctx.fillStyle = SK.trapPit;
-  ctx.fillRect(px + 1, py + 1, GRID - 2, GRID - 2);
+  ctx.fillRect(px + 1 * PX, py + 1 * PX, GRID - 2 * PX, GRID - 2 * PX);
   ctx.fillStyle = SK.trapSpike;
   for (let i = 0; i < 3; i++) {
-    const sx = px + 4 + i * 5;
+    const sx = px + 4 * PX + i * 5 * PX;
     ctx.beginPath();
-    ctx.moveTo(sx, py + GRID - 4);
-    ctx.lineTo(sx + 2.5, py + 6);
-    ctx.lineTo(sx + 5, py + GRID - 4);
+    ctx.moveTo(sx, py + GRID - 4 * PX);
+    ctx.lineTo(sx + 2.5 * PX, py + 6 * PX);
+    ctx.lineTo(sx + 5 * PX, py + GRID - 4 * PX);
     ctx.closePath();
     ctx.fill();
   }
@@ -926,66 +937,67 @@ function playSound(name, type) {
 }
 
 function drawBook() {
+  const U = canvas.width / 400;
   ctx.fillStyle = SK.overlay;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const total = FRUIT_ORDER.length;
   const got = FRUIT_ORDER.filter(e => save.book[e[1]]).length;
   ctx.fillStyle = SK.text;
-  ctx.font = 'bold 18px sans-serif';
+  ctx.font = 'bold ' + Math.round(18 * U) + 'px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('果子图鉴 · 已点亮 ' + got + '/' + total, canvas.width / 2, 34);
+  ctx.fillText('果子图鉴 · 已点亮 ' + got + '/' + total, canvas.width / 2, 34 * U);
   ctx.fillStyle = 'rgba(128,128,128,0.35)';
-  ctx.fillRect(70, 46, 260, 8);
+  ctx.fillRect(70 * U, 46 * U, 260 * U, 8 * U);
   ctx.fillStyle = got === total ? '#fd0' : '#4a4';
-  ctx.fillRect(70, 46, Math.round(260 * got / total), 8);
-  ctx.font = '11px sans-serif';
+  ctx.fillRect(70 * U, 46 * U, Math.round(260 * U * got / total), 8 * U);
+  ctx.font = Math.round(11 * U) + 'px sans-serif';
   ctx.fillStyle = SK.text;
   ctx.globalAlpha = 0.6;
-  ctx.fillText('空格或再点按钮关闭', canvas.width / 2, 70);
+  ctx.fillText('空格或再点按钮关闭', canvas.width / 2, 70 * U);
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
-  ctx.font = '12px sans-serif';
-  const colX = [16, 202];
+  ctx.font = Math.round(12 * U) + 'px sans-serif';
+  const colX = [16 * U, 202 * U];
   let col = 0;
-  let y = 104;
+  let y = 104 * U;
   for (const entry of FRUIT_ORDER) {
     const t = entry[1];
-    if (y > 360) {
+    if (y > 360 * U) {
       col++;
-      y = 104;
+      y = 104 * U;
     }
     const x = colX[col];
     const label = entry[0] ? '「' + entry[0] + '」' : '';
     if (save.book[t]) {
-      fillFruitShape(t, x, y - 11, 14);
+      fillFruitShape(t, x, y - 11 * U, 14 * U);
       ctx.fillStyle = SK.text;
-      ctx.fillText(label + BOOK_SHORT[t] + ' ×' + (save.stats.fruits[t] || 0), x + 20, y);
+      ctx.fillText(label + BOOK_SHORT[t] + ' ×' + (save.stats.fruits[t] || 0), x + 20 * U, y);
     } else {
       ctx.fillStyle = 'rgba(128,128,128,0.18)';
       ctx.strokeStyle = 'rgba(128,128,128,0.4)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(x, y - 13, 16, 16, 4);
-      else ctx.rect(x, y - 13, 16, 16);
+      if (ctx.roundRect) ctx.roundRect(x, y - 13 * U, 16 * U, 16 * U, 4 * U);
+      else ctx.rect(x, y - 13 * U, 16 * U, 16 * U);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = 'rgba(128,128,128,0.7)';
-      ctx.font = 'bold 12px sans-serif';
+      ctx.font = 'bold ' + Math.round(12 * U) + 'px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('?', x + 8, y);
+      ctx.fillText('?', x + 8 * U, y);
       ctx.textAlign = 'left';
-      ctx.font = '12px sans-serif';
+      ctx.font = Math.round(12 * U) + 'px sans-serif';
       ctx.fillStyle = 'rgba(128,128,128,0.55)';
-      ctx.fillText(label + '???', x + 20, y);
+      ctx.fillText(label + '???', x + 20 * U, y);
     }
-    y += 27;
+    y += 27 * U;
   }
   const totFruits = Object.values(save.stats.fruits).reduce((a, b) => a + b, 0);
   ctx.fillStyle = SK.text;
   ctx.globalAlpha = 0.7;
-  ctx.font = '11px sans-serif';
+  ctx.font = Math.round(11 * U) + 'px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('累计吃果 ' + totFruits + ' 个 · 升层 ' + save.stats.climbs + ' / 降层 ' + save.stats.descents, canvas.width / 2, 388);
+  ctx.fillText('累计吃果 ' + totFruits + ' 个 · 升层 ' + save.stats.climbs + ' / 降层 ' + save.stats.descents, canvas.width / 2, 388 * U);
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
@@ -1011,7 +1023,11 @@ function checkAch() {
     four_new: ['shield', 'magnet', 'freeze', 'harvest'].every(t => (st.fruits[t] || 0) >= 1),
     gold_life: (st.goldLives || 0) >= 10,
     skin_secret: save.skins.bamboo || save.skins.cyber,
-    clear999: score >= 999999999
+    clear999: score >= 999999999,
+    daily50: mode === 'daily' && score >= 50,
+    fog5: mode === 'fog' && maxZRun >= 5,
+    zen20: mode === 'zen' && maxZRun >= 20,
+    ghost_pass: mode === 'endless' && !!bestGhost && score > bestGhost.score
   };
   for (const a of ACH) {
     if (cond[a.id] && !save.ach[a.id]) {
@@ -1024,34 +1040,42 @@ function checkAch() {
 }
 
 function drawAch() {
+  const U = canvas.width / 400;
   ctx.fillStyle = SK.overlay;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const got = ACH.filter(a => save.ach[a.id]).length;
   ctx.fillStyle = SK.text;
-  ctx.font = 'bold 18px sans-serif';
+  ctx.font = 'bold ' + Math.round(18 * U) + 'px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('成就 · 已解锁 ' + got + '/' + ACH.length, canvas.width / 2, 34);
-  ctx.font = '11px sans-serif';
+  ctx.fillText('成就 · 已解锁 ' + got + '/' + ACH.length, canvas.width / 2, 34 * U);
+  ctx.font = Math.round(11 * U) + 'px sans-serif';
   ctx.globalAlpha = 0.6;
-  ctx.fillText('空格或再点按钮关闭', canvas.width / 2, 56);
+  ctx.fillText('空格或再点按钮关闭', canvas.width / 2, 56 * U);
   ctx.globalAlpha = 1;
-  ctx.font = '12px sans-serif';
+  ctx.font = Math.round(11 * U) + 'px sans-serif';
   ctx.textAlign = 'left';
-  let y = 82;
+  const colX = [16 * U, 206 * U];
+  let col = 0;
+  let y = 82 * U;
   for (const a of ACH) {
+    if (y > 280 * U) {
+      col++;
+      y = 82 * U;
+    }
+    const x = colX[col];
     if (save.ach[a.id]) {
       ctx.fillStyle = SK.glow ? '#59c9ff' : '#2a7';
-      ctx.fillText('✓', 22, y);
+      ctx.fillText('✓', x, y);
       ctx.fillStyle = SK.text;
-      ctx.fillText(a.name + ':' + a.desc, 40, y);
+      ctx.fillText(a.name + ':' + a.desc, x + 14 * U, y);
     } else {
       ctx.fillStyle = SK.text;
       ctx.globalAlpha = 0.35;
-      ctx.fillText('·', 22, y);
-      ctx.fillText(a.name + ':' + a.desc, 40, y);
+      ctx.fillText('·', x, y);
+      ctx.fillText(a.name + ':' + a.desc, x + 14 * U, y);
       ctx.globalAlpha = 1;
     }
-    y += 18.5;
+    y += 18.5 * U;
   }
   ctx.textAlign = 'left';
 }
@@ -1097,16 +1121,16 @@ function draw() {
         const gp = bestGhost.path[i];
         if (gp[2] !== z) continue;
         ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(gp[0] * GRID + 3, gp[1] * GRID + 3, GRID - 6, GRID - 6, 4);
-        else ctx.rect(gp[0] * GRID + 3, gp[1] * GRID + 3, GRID - 6, GRID - 6);
+        if (ctx.roundRect) ctx.roundRect(gp[0] * GRID + 3 * PX, gp[1] * GRID + 3 * PX, GRID - 6 * PX, GRID - 6 * PX, 4 * PX);
+        else ctx.rect(gp[0] * GRID + 3 * PX, gp[1] * GRID + 3 * PX, GRID - 6 * PX, GRID - 6 * PX);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
     }
   }
 
-  const INSET = 3;
-  const RADIUS = 5;
+  const INSET = 3 * PX;
+  const RADIUS = 5 * PX;
   const onLayer = snake.filter(s => s.z === z);
 
   const blink = Date.now() < invincibleUntil && Math.floor(Date.now() / 120) % 2 === 0;
@@ -1127,8 +1151,8 @@ function draw() {
   for (let i = 1; i < onLayer.length; i++) {
     const s = onLayer[i];
     const tailN = onLayer.length - 1 - i;
-    const inset = tailN === 0 ? 6.5 : (tailN === 1 ? 5 : INSET);
-    const rad = tailN === 0 ? 4 : (tailN === 1 ? 4.5 : RADIUS);
+    const inset = tailN === 0 ? 6.5 * PX : (tailN === 1 ? 5 * PX : INSET);
+    const rad = tailN === 0 ? 4 * PX : (tailN === 1 ? 4.5 * PX : RADIUS);
     ctx.beginPath();
     if (ctx.roundRect) {
       ctx.roundRect(s.x * GRID + inset, s.y * GRID + inset, GRID - inset * 2, GRID - inset * 2, rad);
@@ -1141,14 +1165,14 @@ function draw() {
   const h = snake[0];
   const cx = h.x * GRID + GRID / 2;
   const cy = h.y * GRID + GRID / 2;
-  const fx = cx + dir.x * 7;
-  const fy = cy + dir.y * 7;
-  const px = -dir.y * 4;
-  const py = dir.x * 4;
+  const fx = cx + dir.x * 7 * PX;
+  const fy = cy + dir.y * 7 * PX;
+  const px = -dir.y * 4 * PX;
+  const py = dir.x * 4 * PX;
   ctx.globalAlpha = blink ? 0.25 : (ghosting ? 0.45 : 1);
   ctx.fillStyle = SK.head;
   ctx.beginPath();
-  ctx.arc(cx, cy, 9.5, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 9.5 * PX, 0, Math.PI * 2);
   ctx.fill();
   if (SK.glow) {
     ctx.save();
@@ -1157,33 +1181,33 @@ function draw() {
     for (let i = 0; i < onLayer.length; i++) {
       const s = onLayer[i];
       ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(s.x * GRID - 2, s.y * GRID - 2, GRID + 4, GRID + 4, 7);
-      else ctx.rect(s.x * GRID - 2, s.y * GRID - 2, GRID + 4, GRID + 4);
+      if (ctx.roundRect) ctx.roundRect(s.x * GRID - 2 * PX, s.y * GRID - 2 * PX, GRID + 4 * PX, GRID + 4 * PX, 7 * PX);
+      else ctx.rect(s.x * GRID - 2 * PX, s.y * GRID - 2 * PX, GRID + 4 * PX, GRID + 4 * PX);
       ctx.fill();
     }
     ctx.beginPath();
-    ctx.arc(cx, cy, 12.5, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 12.5 * PX, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
   ctx.strokeStyle = SK.tongue;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  const tx = cx + dir.x * 15;
-  const ty = cy + dir.y * 15;
-  ctx.moveTo(cx + dir.x * 9, cy + dir.y * 9);
+  const tx = cx + dir.x * 15 * PX;
+  const ty = cy + dir.y * 15 * PX;
+  ctx.moveTo(cx + dir.x * 9 * PX, cy + dir.y * 9 * PX);
   ctx.lineTo(tx, ty);
   ctx.moveTo(tx, ty);
-  ctx.lineTo(tx + dir.x * 2.5 - dir.y * 2.5, ty + dir.y * 2.5 + dir.x * 2.5);
+  ctx.lineTo(tx + dir.x * 2.5 * PX - dir.y * 2.5 * PX, ty + dir.y * 2.5 * PX + dir.x * 2.5 * PX);
   ctx.moveTo(tx, ty);
-  ctx.lineTo(tx + dir.x * 2.5 + dir.y * 2.5, ty + dir.y * 2.5 - dir.x * 2.5);
+  ctx.lineTo(tx + dir.x * 2.5 * PX + dir.y * 2.5 * PX, ty + dir.y * 2.5 * PX - dir.x * 2.5 * PX);
   ctx.stroke();
   ctx.fillStyle = '#fff';
-  ctx.fillRect(fx + px - 2, fy + py - 2, 4, 4);
-  ctx.fillRect(fx - px - 2, fy - py - 2, 4, 4);
+  ctx.fillRect(fx + px - 2 * PX, fy + py - 2 * PX, 4 * PX, 4 * PX);
+  ctx.fillRect(fx - px - 2 * PX, fy - py - 2 * PX, 4 * PX, 4 * PX);
   ctx.fillStyle = '#000';
-  ctx.fillRect(fx + px - 1, fy + py - 1, 2, 2);
-  ctx.fillRect(fx - px - 1, fy - py - 1, 2, 2);
+  ctx.fillRect(fx + px - 1 * PX, fy + py - 1 * PX, 2 * PX, 2 * PX);
+  ctx.fillRect(fx - px - 1 * PX, fy - py - 1 * PX, 2 * PX, 2 * PX);
   ctx.globalAlpha = 1;
 
   for (const f of layers[z].fruits) {
@@ -1191,7 +1215,7 @@ function draw() {
   }
 
   if (mode === 'fog' && started && !cleared && !settled) {
-    const fogGrad = ctx.createRadialGradient(cx, cy, 70, cx, cy, 135);
+    const fogGrad = ctx.createRadialGradient(cx, cy, 70 * PX, cx, cy, 135 * PX);
     fogGrad.addColorStop(0, 'rgba(8,10,18,0)');
     fogGrad.addColorStop(1, 'rgba(8,10,18,0.96)');
     ctx.fillStyle = fogGrad;
@@ -1241,15 +1265,15 @@ function draw() {
     ctx.textAlign = 'right';
     ctx.fillText(gate.open ? '大门已开启' : '大门 ' + gate.eaten + '/' + gate.needed, canvas.width - 10, 64);
     ctx.textAlign = 'left';
-    const gx = canvas.width - GRID + 3;
-    const gy = canvas.height / 2 - GRID / 2 + 2;
+    const gx = canvas.width - GRID + 3 * PX;
+    const gy = canvas.height / 2 - GRID / 2 + 2 * PX;
     ctx.fillStyle = gate.open
       ? 'rgba(40,180,80,' + (0.55 + 0.45 * Math.abs(Math.sin(Date.now() / 250))).toFixed(3) + ')'
       : '#3a3f4a';
-    ctx.fillRect(gx, gy, GRID - 6, GRID - 4);
+    ctx.fillRect(gx, gy, GRID - 6 * PX, GRID - 4 * PX);
     if (!gate.open) {
       ctx.fillStyle = '#c33';
-      ctx.fillRect(gx, gy + (GRID - 4) / 2 - 2, GRID - 6, 4);
+      ctx.fillRect(gx, gy + (GRID - 4 * PX) / 2 - 2 * PX, GRID - 6 * PX, 4 * PX);
     }
   }
   ctx.textAlign = 'left';
