@@ -240,6 +240,10 @@ let ghostRun = [];
 let stepCount = 0;
 let konamiBuf = [];
 let konamiUsed = false;
+let particles = [];
+let shakeUntil = 0;
+let runMaxCombo = 0;
+let runFruits = 0;
 let bestGhost = null;
 try {
   bestGhost = JSON.parse(localStorage.getItem('snake3d_ghost_endless') || 'null');
@@ -662,6 +666,8 @@ function step() {
 function eat(f, z, eff) {
   if (eff === undefined) eff = f.type;
   combo++;
+  runMaxCombo = Math.max(runMaxCombo, combo);
+  runFruits++;
   if (combo > (save.stats.maxCombo || 0)) save.stats.maxCombo = combo;
   comboUntil = Date.now() + 20000;
   const cm = 1 + Math.min(4, Math.floor(combo / 8));
@@ -691,6 +697,7 @@ function eat(f, z, eff) {
   persist();
   layers[z].fruits = layers[z].fruits.filter(x => x !== f);
   layers[z].fruits.push(randomFruit(z));
+  burst(f.x * GRID + GRID / 2, f.y * GRID + GRID / 2, FRUIT_STYLES[f.type] || '#fff', f.type === 'gold' ? 16 : 9);
 
   const gate = layers[z].gate;
   if (gate && !gate.open && f.type !== 'bomb') {
@@ -698,6 +705,7 @@ function eat(f, z, eff) {
     if (gate.eaten >= gate.needed) {
       gate.open = true;
       save.stats.gates = (save.stats.gates || 0) + 1;
+      burst(canvas.width - GRID / 2, canvas.height / 2, '#2b2', 14);
       showToast('大门开启!右边缘恢复升层!');
       playSound('climb');
     } else {
@@ -785,6 +793,7 @@ function loseLife(msg) {
   if (shield > 0) {
     shield--;
     invincibleUntil = Date.now() + 1000;
+    burst(snake[0].x * GRID + GRID / 2, snake[0].y * GRID + GRID / 2, '#09f', 12);
     showToast('护盾抵挡了伤害!');
     playSound('block');
     return;
@@ -792,12 +801,23 @@ function loseLife(msg) {
   combo = 0;
   comboUntil = 0;
   lives--;
+  burst(snake[0].x * GRID + GRID / 2, snake[0].y * GRID + GRID / 2, '#d33', 16);
+  shakeUntil = Date.now() + 200;
   if (lives <= 0) {
     settle('dead');
   } else {
     invincibleUntil = Date.now() + 2000;
     showToast(msg + '!剩 ' + lives + ' 命');
   }
+}
+
+function burst(cx, cy, color, n) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const sp = (1 + Math.random() * 2.5) * PX;
+    particles.push({x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - PX, life: 18 + Math.random() * 16, color: color, size: (2 + Math.random() * 2) * PX});
+  }
+  if (particles.length > 240) particles = particles.slice(-240);
 }
 
 function settle(reason) {
@@ -1087,6 +1107,10 @@ function draw() {
   if (mode === 'fog' && started && !cleared && !settled && !bookOpen && !achOpen) {
     SK = Object.assign({}, SK, {text: '#dfe8ff'});
   }
+  ctx.save();
+  if (Date.now() < shakeUntil) {
+    ctx.translate((Math.random() - 0.5) * 8 * PX, (Math.random() - 0.5) * 8 * PX);
+  }
   ctx.fillStyle = SK.board;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -1221,6 +1245,22 @@ function draw() {
     ctx.fillStyle = fogGrad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.12 * PX;
+    p.life--;
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+      continue;
+    }
+    ctx.globalAlpha = Math.min(1, p.life / 12);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
 
   ctx.fillStyle = SK.text;
   ctx.font = 'bold 16px sans-serif';
@@ -1372,7 +1412,8 @@ function draw() {
     ctx.font = '16px sans-serif';
     ctx.fillText(MODE_NAMES[mode] + '模式  得分: ' + score, canvas.width / 2, canvas.height / 2 - 8);
     ctx.fillText(score > bestAtStart ? '新纪录!' : '最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 18);
-    ctx.fillText('点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 46);
+    ctx.fillText('到达第 ' + maxZRun + ' 层 · 最长连击 ×' + runMaxCombo + ' · 吃果 ' + runFruits + ' 个', canvas.width / 2, canvas.height / 2 + 42);
+    ctx.fillText('点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 66);
   } else if (cleared) {
     ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1420,6 +1461,7 @@ function draw() {
     ctx.fillText('点"图鉴"按钮查看果子图鉴', canvas.width / 2, 116);
     ctx.textAlign = 'left';
   }
+  ctx.restore();
 }
 
 function reset() {
@@ -1455,6 +1497,10 @@ function reset() {
   ghostRun = [];
   stepCount = 0;
   konamiUsed = false;
+  particles = [];
+  shakeUntil = 0;
+  runMaxCombo = 0;
+  runFruits = 0;
   layers = {};
   ensureLayer(1);
   paused = false;
