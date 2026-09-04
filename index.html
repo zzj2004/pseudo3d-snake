@@ -162,13 +162,29 @@ function togglePause() {
 }
 
 const modeBtn = document.getElementById('modeBtn');
-const MODE_NAMES = {endless: '无尽', survival: '有命', timed: '限时'};
+const MODE_NAMES = {endless: '无尽', survival: '有命', timed: '限时', daily: '每日', fog: '迷雾'};
 const MODE_DESC = {
   endless: '无尽模式:经典玩法,小心炸弹与陷阱',
   survival: '有命模式:3 条命,小心炸弹与陷阱',
-  timed: '限时模式:180 秒冲高分,小心炸弹与陷阱'
+  timed: '限时模式:180 秒冲高分,小心炸弹与陷阱',
+  daily: '每日挑战:固定种子,大家同一张图比高分',
+  fog: '迷雾模式:雾里探路,蛇头周围才可见'
 };
 let mode = 'endless';
+let rand = Math.random;
+function mulberry32(a) {
+  return function() {
+    a |= 0;
+    a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function dailySeed() {
+  const d = new Date();
+  return (d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()) | 0;
+}
 function applyModeBtn() {
   modeBtn.textContent = '模式:' + MODE_NAMES[mode];
 }
@@ -178,7 +194,7 @@ modeBtn.addEventListener('click', () => {
     showToast('本局结束后可切换模式');
     return;
   }
-  const order = ['endless', 'survival', 'timed'];
+  const order = ['endless', 'survival', 'timed', 'daily', 'fog'];
   mode = order[(order.indexOf(mode) + 1) % 3];
   applyModeBtn();
   reset();
@@ -276,7 +292,7 @@ const ACH = [
   {id: 'clear999', name: '不可能的任务', desc: '达成 999999999 通关'}
 ];
 function defaultSave() {
-  return {v: 2, best: {endless: 0, survival: 0, timed: 0}, sound: false, stats: {climbs: 0, descents: 0, fruits: {}, gates: 0, goldLives: 0, maxCombo: 0}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic', ach: {}};
+  return {v: 2, best: {endless: 0, survival: 0, timed: 0, daily: 0, fog: 0}, sound: false, stats: {climbs: 0, descents: 0, fruits: {}, gates: 0, goldLives: 0, maxCombo: 0}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic', ach: {}};
 }
 function loadSave() {
   try {
@@ -289,10 +305,12 @@ function loadSave() {
       best = {
         endless: Number(s.best.endless) || 0,
         survival: Number(s.best.survival) || 0,
-        timed: Number(s.best.timed) || 0
+        timed: Number(s.best.timed) || 0,
+        daily: Number(s.best.daily) || 0,
+        fog: Number(s.best.fog) || 0
       };
     } else if (s.v === 1) {
-      best = {endless: Number(s.best) || 0, survival: 0, timed: 0};
+      best = {endless: Number(s.best) || 0, survival: 0, timed: 0, daily: 0, fog: 0};
     } else {
       return defaultSave();
     }
@@ -377,9 +395,9 @@ function resetDemo() {
   demoDir = {x: 1, y: 0};
 }
 function demoStep() {
-  if (Math.random() < 0.35) {
+  if (rand() < 0.35) {
     const opts = [{x: 0, y: -1}, {x: 0, y: 1}, {x: -1, y: 0}, {x: 1, y: 0}].filter(d => d.x !== -demoDir.x || d.y !== -demoDir.y);
-    demoDir = opts[Math.floor(Math.random() * opts.length)];
+    demoDir = opts[Math.floor(rand() * opts.length)];
   }
   const head = {x: demoSnake[0].x + demoDir.x, y: demoSnake[0].y + demoDir.y, z: 1};
   if (head.x < 0) head.x = COLS - 1;
@@ -421,7 +439,7 @@ function ensureLayer(z, avoid) {
     layers[z] = {fruits: [], walls: [], traps: [], gate: (z > 0 && z % 10 === 0) ? {needed: 3, eaten: 0, open: false} : null};
     for (let i = 0; i < 3; i++) layers[z].fruits.push(randomFruit(z, avoid, true));
     if (z >= 2) {
-      const count = 4 + Math.floor(Math.random() * 4) + Math.min(4, Math.floor((z - 1) / 2));
+      const count = 4 + Math.floor(rand() * 4) + Math.min(4, Math.floor((z - 1) / 2));
       for (let i = 0; i < count; i++) layers[z].walls.push(randomWall(z, avoid));
       const tcount = 1 + Math.min(2, Math.floor((z - 1) / 3));
       for (let i = 0; i < tcount; i++) layers[z].traps.push(randomWall(z, avoid));
@@ -446,23 +464,23 @@ function randomFruit(z, avoid, noDanger) {
   let p;
   do {
     p = {
-      x: Math.floor(Math.random() * COLS),
-      y: Math.floor(Math.random() * ROWS)
+      x: Math.floor(rand() * COLS),
+      y: Math.floor(rand() * ROWS)
     };
   } while (snake.some(s => s.z === z && s.x === p.x && s.y === p.y) ||
            fruits.some(f => f.x === p.x && f.y === p.y) ||
            layers[z].walls.some(w => w.x === p.x && w.y === p.y) ||
            layers[z].traps.some(t => t.x === p.x && t.y === p.y) ||
            (avoid && avoid.x === p.x && avoid.y === p.y));
-  p.type = pool[Math.floor(Math.random() * pool.length)];
+  p.type = pool[Math.floor(rand() * pool.length)];
   return p;
 }
 function randomWall(z, avoid) {
   let p;
   do {
     p = {
-      x: Math.floor(Math.random() * COLS),
-      y: Math.floor(Math.random() * ROWS)
+      x: Math.floor(rand() * COLS),
+      y: Math.floor(rand() * ROWS)
     };
   } while (layers[z].walls.some(w => w.x === p.x && w.y === p.y) ||
            layers[z].traps.some(t => t.x === p.x && t.y === p.y) ||
@@ -536,7 +554,7 @@ function step() {
   const eaten = layers[head.z].fruits.find(f => f.x === head.x && f.y === head.y);
   if (eaten) {
     const eatenZ = head.z;
-    const eff = eaten.type === 'rainbow' ? RAINBOW_POOL[Math.floor(Math.random() * RAINBOW_POOL.length)] : eaten.type;
+    const eff = eaten.type === 'rainbow' ? RAINBOW_POOL[Math.floor(rand() * RAINBOW_POOL.length)] : eaten.type;
     if (eff === 'up') {
       head.z += 1;
       ensureLayer(head.z, head);
@@ -679,7 +697,7 @@ function eat(f, z, eff) {
     const z2 = snake[0].z;
     let p;
     do {
-      p = {x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS)};
+      p = {x: Math.floor(rand() * COLS), y: Math.floor(rand() * ROWS)};
     } while (
       snake.some(s => s.z === z2 && s.x === p.x && s.y === p.y) ||
       layers[z2].fruits.some(q => q.x === p.x && q.y === p.y) ||
@@ -986,6 +1004,9 @@ function draw() {
   const z = snake[0].z;
   ensureLayer(z);
   SK = SKINS[save.skin] || SKINS.classic;
+  if (mode === 'fog' && started && !cleared && !settled && !bookOpen && !achOpen) {
+    SK = Object.assign({}, SK, {text: '#dfe8ff'});
+  }
   ctx.fillStyle = SK.board;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -1095,6 +1116,14 @@ function draw() {
     fillFruitShape(f.type, f.x * GRID, f.y * GRID, GRID);
   }
 
+  if (mode === 'fog' && started && !cleared && !settled) {
+    const fogGrad = ctx.createRadialGradient(cx, cy, 70, cx, cy, 135);
+    fogGrad.addColorStop(0, 'rgba(8,10,18,0)');
+    fogGrad.addColorStop(1, 'rgba(8,10,18,0.96)');
+    ctx.fillStyle = fogGrad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
   ctx.fillStyle = SK.text;
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'left';
@@ -1107,6 +1136,14 @@ function draw() {
     ctx.fillText('连击 ×' + combo + (cm > 1 ? '  分数×' + cm : ''), 10, 40);
   }
 
+  if (mode === 'daily' && started && !settled) {
+    const d = new Date();
+    ctx.fillStyle = SK.text;
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('每日挑战 ' + d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(), canvas.width / 2, 20);
+    ctx.textAlign = 'left';
+  }
   if (mode === 'timed' && started && !settled) {
     const left = Math.max(0, timedEndsAt - Date.now());
     const mm = Math.floor(left / 60000);
@@ -1303,6 +1340,7 @@ function reset() {
   settled = false;
   settleReason = '';
   bestAtStart = save.best[mode] || 0;
+  rand = mulberry32(mode === 'daily' ? dailySeed() : (Date.now() | 0));
   timedEndsAt = mode === 'timed' ? Date.now() + 180000 : 0;
   timedPauseLeft = 0;
   fastUntil = 0;
