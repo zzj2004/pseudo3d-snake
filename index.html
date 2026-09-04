@@ -59,9 +59,11 @@
     <button id="restartBtn">重新开始</button>
     <button id="modeBtn">模式:无尽</button>
     <button id="soundBtn">音效:关</button>
+    <button id="bgmBtn">音乐:关</button>
     <button id="bookBtn">图鉴</button>
     <button id="achBtn">成就</button>
     <button id="shareBtn">分享</button>
+    <button id="replayBtn">回放</button>
     <button id="skinBtn">皮肤:经典</button>
     <label for="speed">速度:</label>
     <input type="range" id="speed" min="80" max="300" step="10" value="150">
@@ -106,6 +108,10 @@ pauseBtn.addEventListener('click', () => {
     achOpen = false;
     return;
   }
+  if (replayOpen) {
+    replayOpen = false;
+    return;
+  }
   if (started && !cleared && !settled) togglePause();
 });
 startBtn.addEventListener('click', () => {
@@ -141,6 +147,10 @@ bookBtn.addEventListener('click', () => {
     achOpen = false;
     return;
   }
+  if (replayOpen) {
+    replayOpen = false;
+    return;
+  }
   if (started && !paused && !cleared && !settled) togglePause();
   bookOpen = true;
 });
@@ -153,8 +163,29 @@ achBtn.addEventListener('click', () => {
     bookOpen = false;
     return;
   }
+  if (replayOpen) {
+    replayOpen = false;
+    return;
+  }
   if (started && !paused && !cleared && !settled) togglePause();
   achOpen = true;
+});
+const replayBtn = document.getElementById('replayBtn');
+replayBtn.addEventListener('click', () => {
+  if (replayOpen) {
+    replayOpen = false;
+    return;
+  }
+  if (!bestGhost) {
+    showToast('暂无影子:先在无尽模式创造纪录');
+    return;
+  }
+  if (bookOpen) bookOpen = false;
+  if (achOpen) achOpen = false;
+  if (started && !paused && !cleared && !settled) togglePause();
+  replayOpen = true;
+  replayIdx = 0;
+  replayDone = false;
 });
 function togglePause() {
   paused = !paused;
@@ -214,6 +245,9 @@ let started = false;
 let paused = false;
 let bookOpen = false;
 let achOpen = false;
+let replayOpen = false;
+let replayIdx = 0;
+let replayDone = false;
 let cleared = false;
 let settled = false;
 let settleReason = '';
@@ -319,7 +353,7 @@ const ACH = [
   {id: 'ghost_pass', name: '超越影子', desc: '无尽分数超过影子纪录'}
 ];
 function defaultSave() {
-  return {v: 2, best: {endless: 0, survival: 0, timed: 0, daily: 0, fog: 0, zen: 0}, sound: false, stats: {climbs: 0, descents: 0, fruits: {}, gates: 0, goldLives: 0, maxCombo: 0}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic', ach: {}};
+  return {v: 2, best: {endless: 0, survival: 0, timed: 0, daily: 0, fog: 0, zen: 0}, sound: false, bgm: false, stats: {climbs: 0, descents: 0, fruits: {}, gates: 0, goldLives: 0, maxCombo: 0}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic', ach: {}};
 }
 function loadSave() {
   try {
@@ -355,6 +389,7 @@ function loadSave() {
         fruits: (s.stats.fruits && typeof s.stats.fruits === 'object') ? s.stats.fruits : {}
       },
       book: (s.book && typeof s.book === 'object') ? s.book : {},
+      bgm: !!s.bgm,
       ach: (s.ach && typeof s.ach === 'object') ? s.ach : {},
       skins: {
         bamboo: !!(s.skins && s.skins.bamboo),
@@ -421,6 +456,39 @@ shareBtn.addEventListener('click', () => {
   }
   showToast(ok ? '战绩已复制,去发给朋友!' : '复制失败,手动截图也行!');
 });
+const bgmBtn = document.getElementById('bgmBtn');
+let bgmOn = !!save.bgm;
+let bgmTimer = null;
+let bgmStep = 0;
+const BGM_SEQ = [262, 330, 392, 523, 392, 330, 294, 330, 392, 440, 523, 587, 523, 440, 392, 330];
+function bgmNote() {
+  if (!bgmOn || !audioCtx) return;
+  const f = BGM_SEQ[bgmStep % BGM_SEQ.length];
+  tone(f, 0, 0.22, 'triangle', 0.03);
+  if (bgmStep % 4 === 0) tone(f / 2, 0, 0.3, 'sine', 0.025);
+  bgmStep++;
+}
+function bgmStart() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  if (!audioCtx) audioCtx = new AC();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (!bgmTimer) bgmTimer = setInterval(bgmNote, 280);
+}
+function bgmStop() {
+  if (bgmTimer) {
+    clearInterval(bgmTimer);
+    bgmTimer = null;
+  }
+}
+bgmBtn.addEventListener('click', () => {
+  bgmOn = !bgmOn;
+  bgmBtn.textContent = bgmOn ? '音乐:开' : '音乐:关';
+  save.bgm = bgmOn;
+  persist();
+  if (bgmOn) bgmStart(); else bgmStop();
+});
+if (bgmOn) bgmBtn.textContent = '音乐:开';
 let audioCtx = null;
 const FRUIT_PITCH = {
   normal: 440, fast: 587, slow: 349, grow: 494,
@@ -908,6 +976,7 @@ function ensureAudio() {
   if (!AC) return;
   if (!audioCtx) audioCtx = new AC();
   if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (bgmOn && !bgmTimer) bgmStart();
 }
 function tone(freq, delay, dur, type, vol, slideTo) {
   const t0 = audioCtx.currentTime + delay;
@@ -1019,6 +1088,51 @@ function drawBook() {
   ctx.textAlign = 'center';
   ctx.fillText('累计吃果 ' + totFruits + ' 个 · 升层 ' + save.stats.climbs + ' / 降层 ' + save.stats.descents, canvas.width / 2, 388 * U);
   ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+}
+
+function drawReplay() {
+  const path = bestGhost.path;
+  ctx.fillStyle = SK.overlay;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (!replayDone) {
+    replayIdx = Math.min(path.length - 1, replayIdx + 0.28);
+    if (replayIdx >= path.length - 1) replayDone = true;
+  }
+  const idx = Math.floor(replayIdx);
+  const z = path[idx][2];
+  ctx.globalAlpha = 0.12;
+  ctx.fillStyle = SK.text;
+  for (let i = 0; i < path.length; i += 2) {
+    if (path[i][2] !== z) continue;
+    ctx.fillRect(path[i][0] * GRID + 6 * PX, path[i][1] * GRID + 6 * PX, GRID - 12 * PX, GRID - 12 * PX);
+  }
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = SK.glow ? '#ffd54f' : '#b8860b';
+  for (let i = Math.max(0, idx - 6); i <= idx; i++) {
+    const p = path[i];
+    if (p[2] !== z) continue;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(p[0] * GRID + 2 * PX, p[1] * GRID + 2 * PX, GRID - 4 * PX, GRID - 4 * PX, 5 * PX);
+    else ctx.rect(p[0] * GRID + 2 * PX, p[1] * GRID + 2 * PX, GRID - 4 * PX, GRID - 4 * PX);
+    ctx.fill();
+  }
+  const hp = path[idx];
+  ctx.fillStyle = SK.head;
+  ctx.beginPath();
+  ctx.arc(hp[0] * GRID + GRID / 2, hp[1] * GRID + GRID / 2, 9 * PX, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = SK.text;
+  ctx.font = 'bold ' + Math.round(18 * PX) + 'px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('巅峰回放 · 第 ' + (idx + 1) + '/' + path.length + ' 步', canvas.width / 2, 34 * PX);
+  ctx.font = Math.round(12 * PX) + 'px sans-serif';
+  ctx.fillText('最终得分 ' + bestGhost.score + ' · 金色轨迹就是你的历史最佳', canvas.width / 2, 56 * PX);
+  if (replayDone) {
+    ctx.font = 'bold ' + Math.round(13 * PX) + 'px sans-serif';
+    ctx.fillText('回放结束 · 再点回放按钮退出', canvas.width / 2, canvas.height - 16 * PX);
+  }
   ctx.textAlign = 'left';
 }
 
@@ -1402,6 +1516,8 @@ function draw() {
     drawBook();
   } else if (achOpen) {
     drawAch();
+  } else if (replayOpen) {
+    drawReplay();
   } else if (settled) {
     ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1548,6 +1664,10 @@ document.addEventListener('keydown', e => {
     }
     if (achOpen) {
       achOpen = false;
+      return;
+    }
+    if (replayOpen) {
+      replayOpen = false;
       return;
     }
     if (started && !cleared && !settled) togglePause();
