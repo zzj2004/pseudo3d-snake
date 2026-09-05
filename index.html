@@ -533,8 +533,7 @@ skinBtn.addEventListener('click', () => {
 });
 applySkin();
 if (isHoliday()) showHint('holiday', '节日快乐!今天金果更常见');
-const shareBtn = document.getElementById('shareBtn');
-shareBtn.addEventListener('click', () => {
+function doShare() {
   const daily = save.best.daily || 0;
   const dSt = save.stats.daily || {};
   const text = '【贪吃蛇·伪三维爬层】我的' + MODE_NAMES[mode] + '模式最高 ' + (save.best[mode] || 0) + ' 分' +
@@ -558,7 +557,9 @@ shareBtn.addEventListener('click', () => {
     return;
   }
   showToast(ok ? '战绩已复制,去发给朋友!' : '复制失败,手动截图也行!');
-});
+}
+const shareBtn = document.getElementById('shareBtn');
+shareBtn.addEventListener('click', doShare);
 const fsBtn = document.getElementById('fsBtn');
 fsBtn.addEventListener('click', () => {
   if (document.fullscreenElement) {
@@ -1599,11 +1600,18 @@ function draw() {
   }
 
   if (mode === 'fog' && started && !cleared && !settled) {
-    const fogGrad = ctx.createRadialGradient(cx, cy, 70 * PX, cx, cy, 135 * PX);
-    fogGrad.addColorStop(0, 'rgba(8,10,18,0)');
-    fogGrad.addColorStop(1, 'rgba(8,10,18,0.96)');
-    ctx.fillStyle = fogGrad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const centers = [{x: cx, y: cy}];
+    if (twoPlayer && snake2.length) {
+      const h2 = snake2.find(s => s.z === z);
+      if (h2) centers.push({x: h2.x * GRID + GRID / 2, y: h2.y * GRID + GRID / 2});
+    }
+    for (const c of centers) {
+      const fogGrad = ctx.createRadialGradient(c.x, c.y, 70 * PX, c.x, c.y, 135 * PX);
+      fogGrad.addColorStop(0, 'rgba(8,10,18,0)');
+      fogGrad.addColorStop(1, 'rgba(8,10,18,0.96)');
+      ctx.fillStyle = fogGrad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
   }
 
   for (let i = particles.length - 1; i >= 0; i--) {
@@ -1998,6 +2006,12 @@ document.addEventListener('keydown', e => {
     return;
   }
 
+  if (e.code === 'KeyS' && (settled || cleared)) {
+    e.preventDefault();
+    doShare();
+    return;
+  }
+
   if (e.code === 'KeyR') {
     if (bookOpen || achOpen || replayOpen) return;
     if (started && (settled || cleared)) {
@@ -2174,9 +2188,10 @@ function pollPad() {
 
 window.addEventListener('gamepadconnected', () => showToast('手柄已连接:十字键移动 · A 重开 · Start 暂停'));
 
+let shadowTick = 0;
 function frame() {
   pollPad();
-  drawShadow();
+  if ((shadowTick++ & 1) === 0) drawShadow();
   draw();
   requestAnimationFrame(frame);
 }
