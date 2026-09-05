@@ -359,9 +359,10 @@ modeBtn.addEventListener('click', () => {
     return;
   }
   const order = ['endless', 'survival', 'timed', 'daily', 'fog', 'zen'];
-  mode = order[(order.indexOf(mode) + 1) % 3];
+  mode = order[(order.indexOf(mode) + 1) % order.length];
   applyModeBtn();
   reset();
+  started = false;
 });
 
 let started = false;
@@ -701,6 +702,7 @@ dualBtn.addEventListener('click', () => {
   dualBtn.textContent = twoPlayer ? '双人:开' : '双人:关';
   dualBtn.classList.toggle('on', twoPlayer);
   reset();
+  started = false;
   if (twoPlayer) showToast('双人合作:P2 使用 W/A/S/D');
 });
 const dpadEl = document.getElementById('dpad');
@@ -2412,6 +2414,18 @@ function applyDir2(d) {
 
 document.addEventListener('click', e => {
   if (e.target && e.target.tagName === 'BUTTON') e.target.blur();
+});
+window.addEventListener('blur', () => {
+  if (started && !paused && !cleared && !settled && !bookOpen && !achOpen && !replayOpen) {
+    togglePause();
+    showToast('已自动暂停');
+  }
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && started && !paused && !cleared && !settled && !bookOpen && !achOpen && !replayOpen) {
+    togglePause();
+    showToast('已自动暂停');
+  }
 });
 document.addEventListener('keydown', e => {
   if (e.isComposing) return;
