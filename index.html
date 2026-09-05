@@ -1162,6 +1162,286 @@ function controlsReversed() {
   return Date.now() < reverseUntil;
 }
 
+function fruitShine(g, x, y, r) {
+  g.strokeStyle = 'rgba(255,255,255,0.65)';
+  g.lineWidth = Math.max(1, r * 0.14);
+  g.beginPath();
+  g.arc(x, y, r * 0.6, Math.PI * 1.05, Math.PI * 1.5);
+  g.stroke();
+}
+function fruitStem(g, x, y, s, leaf) {
+  g.strokeStyle = '#7a4a1f';
+  g.lineWidth = Math.max(1, s * 0.05);
+  g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + s * 0.01, y - s * 0.09, x + s * 0.03, y - s * 0.15); g.stroke();
+  if (leaf) {
+    g.fillStyle = '#43a047';
+    g.beginPath();
+    g.ellipse(x + s * 0.11, y - s * 0.14, s * 0.11, s * 0.05, -0.55, 0, Math.PI * 2);
+    g.fill();
+  }
+}
+function drawFruitArt(type, g, s) {
+  const cx = s / 2, cy = s / 2 + s * 0.02, r = s * 0.38;
+  if (type === 'normal') {
+    g.fillStyle = '#e53935';
+    g.beginPath(); g.arc(cx, cy + r * 0.08, r, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.22)';
+    g.beginPath(); g.arc(cx - r * 0.32, cy - r * 0.2, r * 0.3, 0, Math.PI * 2); g.fill();
+    fruitStem(g, cx, cy - r * 0.85, s, true);
+  } else if (type === 'fast') {
+    g.fillStyle = '#43a047';
+    g.beginPath(); g.arc(cx - s * 0.05, cy + r * 0.08, r * 0.92, 0, Math.PI * 2); g.fill();
+    fruitShine(g, cx - s * 0.05, cy, r * 0.92);
+    fruitStem(g, cx - s * 0.05, cy - r * 0.8, s, true);
+    g.strokeStyle = 'rgba(255,255,255,0.85)';
+    g.lineWidth = Math.max(1, s * 0.05);
+    g.beginPath(); g.moveTo(cx + r * 0.45, cy - r * 0.35); g.lineTo(cx + r * 1.05, cy - r * 0.35); g.stroke();
+    g.beginPath(); g.moveTo(cx + r * 0.5, cy + r * 0.15); g.lineTo(cx + r * 1.1, cy + r * 0.15); g.stroke();
+  } else if (type === 'slow') {
+    g.fillStyle = '#4a6fd4';
+    g.beginPath(); g.arc(cx, cy + s * 0.04, r, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#33518f';
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + i * Math.PI * 2 / 5;
+      g.beginPath();
+      g.arc(cx + Math.cos(a) * r * 0.28, cy - r * 0.5 + Math.sin(a) * r * 0.2, r * 0.15, 0, Math.PI * 2);
+      g.fill();
+    }
+    fruitShine(g, cx, cy + s * 0.04, r);
+  } else if (type === 'grow') {
+    g.fillStyle = '#f5c518';
+    g.beginPath();
+    g.moveTo(s * 0.18, s * 0.3);
+    g.quadraticCurveTo(s * 0.3, s * 0.88, s * 0.82, s * 0.7);
+    g.quadraticCurveTo(s * 0.88, s * 0.82, s * 0.76, s * 0.88);
+    g.quadraticCurveTo(s * 0.22, s * 0.98, s * 0.08, s * 0.38);
+    g.quadraticCurveTo(s * 0.1, s * 0.24, s * 0.18, s * 0.3);
+    g.fill();
+    g.fillStyle = '#7a4a1f';
+    g.beginPath(); g.arc(s * 0.17, s * 0.31, s * 0.05, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.4)';
+    g.lineWidth = Math.max(1, s * 0.04);
+    g.beginPath(); g.moveTo(s * 0.18, s * 0.38); g.quadraticCurveTo(s * 0.3, s * 0.78, s * 0.72, s * 0.68); g.stroke();
+  } else if (type === 'shrink') {
+    g.fillStyle = '#8e44ad';
+    g.beginPath();
+    g.moveTo(cx, cy - r);
+    g.quadraticCurveTo(cx + r * 1.05, cy - r * 0.4, cx + r * 0.62, cy + r * 0.7);
+    g.quadraticCurveTo(cx, cy + r * 1.15, cx - r * 0.62, cy + r * 0.7);
+    g.quadraticCurveTo(cx - r * 1.05, cy - r * 0.4, cx, cy - r);
+    g.fill();
+    fruitShine(g, cx - r * 0.2, cy, r * 0.8);
+    fruitStem(g, cx, cy - r, s, true);
+  } else if (type === 'reverse') {
+    g.fillStyle = '#f57c00';
+    g.beginPath(); g.arc(cx, cy + s * 0.03, r, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.25)';
+    g.lineWidth = Math.max(1, s * 0.03);
+    for (let i = 0; i < 5; i++) {
+      const a = i * Math.PI * 2 / 5 + 0.4;
+      g.beginPath();
+      g.moveTo(cx + Math.cos(a) * r * 0.15, cy + Math.sin(a) * r * 0.15);
+      g.lineTo(cx + Math.cos(a) * r * 0.85, cy + Math.sin(a) * r * 0.85);
+      g.stroke();
+    }
+    fruitShine(g, cx, cy, r);
+    fruitStem(g, cx, cy - r, s, true);
+  } else if (type === 'up') {
+    const grd = g.createLinearGradient(cx - r, 0, cx + r, 0);
+    grd.addColorStop(0, '#f8a5c2');
+    grd.addColorStop(1, '#e91e63');
+    g.fillStyle = grd;
+    g.beginPath();
+    g.moveTo(cx, cy - r * 0.9);
+    g.quadraticCurveTo(cx + r * 1.05, cy - r * 0.7, cx + r * 0.8, cy + r * 0.55);
+    g.quadraticCurveTo(cx + r * 0.4, cy + r * 1.1, cx, cy + r * 1.05);
+    g.quadraticCurveTo(cx - r * 0.4, cy + r * 1.1, cx - r * 0.8, cy + r * 0.55);
+    g.quadraticCurveTo(cx - r * 1.05, cy - r * 0.7, cx, cy - r * 0.9);
+    g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.5)';
+    g.lineWidth = Math.max(1, s * 0.035);
+    g.beginPath(); g.moveTo(cx, cy - r * 0.55); g.quadraticCurveTo(cx - r * 0.12, cy, cx, cy + r * 0.9); g.stroke();
+    fruitStem(g, cx, cy - r * 0.9, s, true);
+  } else if (type === 'down') {
+    g.fillStyle = '#7cb342';
+    g.beginPath();
+    g.moveTo(cx, cy - r * 1.05);
+    g.quadraticCurveTo(cx + r * 0.55, cy - r * 0.6, cx + r * 0.75, cy + r * 0.25);
+    g.quadraticCurveTo(cx + r * 0.85, cy + r * 1.05, cx, cy + r * 1.05);
+    g.quadraticCurveTo(cx - r * 0.85, cy + r * 1.05, cx - r * 0.75, cy + r * 0.25);
+    g.quadraticCurveTo(cx - r * 0.55, cy - r * 0.6, cx, cy - r * 1.05);
+    g.fill();
+    fruitShine(g, cx - r * 0.25, cy, r * 0.85);
+    fruitStem(g, cx, cy - r, s, true);
+  } else if (type === 'gold') {
+    const grd = g.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.2, cx, cy, r);
+    grd.addColorStop(0, '#fff59d');
+    grd.addColorStop(1, '#f9a825');
+    g.fillStyle = grd;
+    g.beginPath(); g.arc(cx, cy + r * 0.08, r, 0, Math.PI * 2); g.fill();
+    fruitStem(g, cx, cy - r * 0.85, s, true);
+    g.strokeStyle = '#fffde7';
+    g.lineWidth = Math.max(1, s * 0.05);
+    const tw = s * 0.09;
+    g.beginPath();
+    g.moveTo(cx + r * 0.7 - tw, cy - r * 0.9); g.lineTo(cx + r * 0.7 + tw, cy - r * 0.9);
+    g.moveTo(cx + r * 0.7, cy - r * 0.9 - tw); g.lineTo(cx + r * 0.7, cy - r * 0.9 + tw);
+    g.stroke();
+  } else if (type === 'teleport') {
+    g.fillStyle = '#455a64';
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#b0bec5';
+    g.lineWidth = Math.max(1, s * 0.05);
+    g.beginPath();
+    for (let a = 0; a < Math.PI * 3.6; a += 0.25) {
+      const rr = r * 0.12 + a * r * 0.22 / (Math.PI * 3.6);
+      const px2 = cx + Math.cos(a) * rr, py2 = cy + Math.sin(a) * rr;
+      if (a === 0) g.moveTo(px2, py2); else g.lineTo(px2, py2);
+    }
+    g.stroke();
+    fruitShine(g, cx, cy, r);
+  } else if (type === 'clock') {
+    g.fillStyle = '#fafafa';
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#333';
+    g.lineWidth = Math.max(1, s * 0.06);
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+    g.lineWidth = Math.max(1, s * 0.05);
+    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx, cy - r * 0.6); g.stroke();
+    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + r * 0.45, cy + r * 0.2); g.stroke();
+  } else if (type === 'bomb') {
+    g.fillStyle = '#263238';
+    g.beginPath(); g.arc(cx, cy + s * 0.06, r * 0.95, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.2)';
+    g.beginPath(); g.arc(cx - r * 0.3, cy - r * 0.1, r * 0.25, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#8d6e63';
+    g.lineWidth = Math.max(1, s * 0.06);
+    g.beginPath(); g.moveTo(cx, cy - r * 0.75); g.quadraticCurveTo(cx + r * 0.3, cy - r * 1.15, cx + r * 0.55, cy - r * 0.95); g.stroke();
+    g.fillStyle = '#ff7043';
+    g.beginPath(); g.arc(cx + r * 0.58, cy - r * 0.98, s * 0.07, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#ffd54f';
+    g.beginPath(); g.arc(cx + r * 0.58, cy - r * 0.98, s * 0.035, 0, Math.PI * 2); g.fill();
+  } else if (type === 'double') {
+    g.strokeStyle = '#5d4037';
+    g.lineWidth = Math.max(1, s * 0.045);
+    g.beginPath(); g.moveTo(cx - r * 0.4, cy + r * 0.1); g.quadraticCurveTo(cx - r * 0.1, cy - r * 0.9, cx + r * 0.05, cy - r * 1.05); g.stroke();
+    g.beginPath(); g.moveTo(cx + r * 0.45, cy + r * 0.1); g.quadraticCurveTo(cx + r * 0.3, cy - r * 0.7, cx + r * 0.05, cy - r * 1.05); g.stroke();
+    g.fillStyle = '#e53935';
+    g.beginPath(); g.arc(cx - r * 0.42, cy + r * 0.38, r * 0.42, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(cx + r * 0.45, cy + r * 0.38, r * 0.42, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.5)';
+    g.beginPath(); g.arc(cx - r * 0.55, cy + r * 0.25, r * 0.12, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(cx + r * 0.32, cy + r * 0.25, r * 0.12, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#f9a825';
+    g.lineWidth = Math.max(1, s * 0.04);
+    g.beginPath(); g.moveTo(cx + r * 0.05, cy - r * 1.05); g.lineTo(cx + r * 0.75, cy - r * 1.05); g.stroke();
+  } else if (type === 'ghost') {
+    g.fillStyle = 'rgba(176,190,197,0.55)';
+    g.beginPath(); g.arc(cx, cy + s * 0.02, r, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.beginPath(); g.arc(cx - r * 0.28, cy - r * 0.22, r * 0.3, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.6)';
+    g.lineWidth = Math.max(1, s * 0.04);
+    g.beginPath(); g.arc(cx, cy + s * 0.02, r, 0, Math.PI * 2); g.stroke();
+  } else if (type === 'scissors') {
+    g.fillStyle = '#a1887f';
+    g.beginPath(); g.arc(cx, cy + s * 0.03, r * 0.95, 0, Math.PI * 2); g.fill();
+    fruitShine(g, cx, cy, r * 0.95);
+    g.strokeStyle = '#fff';
+    g.lineWidth = Math.max(1, s * 0.05);
+    const k = r * 0.5;
+    g.beginPath();
+    g.moveTo(cx - k, cy - k * 0.6); g.lineTo(cx + k, cy + k * 0.6);
+    g.moveTo(cx + k, cy - k * 0.6); g.lineTo(cx - k, cy + k * 0.6);
+    g.stroke();
+    g.beginPath();
+    g.arc(cx - k * 0.75, cy + k * 0.85, k * 0.3, 0, Math.PI * 2);
+    g.stroke();
+    g.beginPath();
+    g.arc(cx + k * 0.75, cy + k * 0.85, k * 0.3, 0, Math.PI * 2);
+    g.stroke();
+    fruitStem(g, cx, cy - r * 0.9, s, false);
+  } else if (type === 'shield') {
+    g.fillStyle = '#29b6f6';
+    g.beginPath();
+    g.moveTo(cx, cy - r);
+    g.quadraticCurveTo(cx + r * 0.95, cy - r * 0.72, cx + r * 0.85, cy + r * 0.05);
+    g.quadraticCurveTo(cx + r * 0.72, cy + r * 0.75, cx, cy + r);
+    g.quadraticCurveTo(cx - r * 0.72, cy + r * 0.75, cx - r * 0.85, cy + r * 0.05);
+    g.quadraticCurveTo(cx - r * 0.95, cy - r * 0.72, cx, cy - r);
+    g.fill();
+    g.strokeStyle = '#fff';
+    g.lineWidth = Math.max(1, s * 0.05);
+    g.beginPath();
+    g.moveTo(cx, cy - r * 0.62);
+    g.quadraticCurveTo(cx + r * 0.6, cy - r * 0.42, cx + r * 0.55, cy + r * 0.05);
+    g.quadraticCurveTo(cx + r * 0.48, cy + r * 0.5, cx, cy + r * 0.68);
+    g.quadraticCurveTo(cx - r * 0.48, cy + r * 0.5, cx - r * 0.55, cy + r * 0.05);
+    g.quadraticCurveTo(cx - r * 0.6, cy - r * 0.42, cx, cy - r * 0.62);
+    g.stroke();
+    fruitShine(g, cx - r * 0.15, cy - r * 0.2, r * 0.7);
+  } else if (type === 'magnet') {
+    g.fillStyle = '#7b1fa2';
+    g.beginPath(); g.arc(cx, cy + s * 0.03, r, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#e1bee7';
+    g.lineWidth = Math.max(1.5, s * 0.07);
+    g.beginPath();
+    g.arc(cx, cy + s * 0.02, r * 0.52, Math.PI, 0, false);
+    g.moveTo(cx - r * 0.52, cy + s * 0.02);
+    g.lineTo(cx - r * 0.52, cy + s * 0.24);
+    g.moveTo(cx + r * 0.52, cy + s * 0.02);
+    g.lineTo(cx + r * 0.52, cy + s * 0.24);
+    g.stroke();
+    fruitShine(g, cx - r * 0.3, cy - r * 0.25, r * 0.75);
+  } else if (type === 'freeze') {
+    const grd = g.createRadialGradient(cx - r * 0.25, cy - r * 0.25, r * 0.15, cx, cy, r);
+    grd.addColorStop(0, '#e1f5fe');
+    grd.addColorStop(1, '#4fc3f7');
+    g.fillStyle = grd;
+    g.beginPath(); g.arc(cx, cy + s * 0.02, r, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.8)';
+    g.lineWidth = Math.max(1, s * 0.035);
+    for (let i = 0; i < 3; i++) {
+      const a = i * Math.PI / 3 + 0.2;
+      g.beginPath();
+      g.moveTo(cx - Math.cos(a) * r * 0.55, cy - Math.sin(a) * r * 0.55);
+      g.lineTo(cx + Math.cos(a) * r * 0.55, cy + Math.sin(a) * r * 0.55);
+      g.stroke();
+    }
+    fruitShine(g, cx, cy, r);
+  } else if (type === 'harvest') {
+    g.strokeStyle = '#558b2f';
+    g.lineWidth = Math.max(1, s * 0.05);
+    g.beginPath(); g.moveTo(cx, cy - r); g.lineTo(cx, cy + r * 0.2); g.stroke();
+    const cl = [[cx - r * 0.5, cy + r * 0.35, '#9ccc65'], [cx + r * 0.5, cy + r * 0.35, '#c0d860'], [cx, cy + r * 0.65, '#8bc34a']];
+    for (const cl2 of cl) {
+      g.fillStyle = cl2[2];
+      g.beginPath(); g.arc(cl2[0], cl2[1], r * 0.42, 0, Math.PI * 2); g.fill();
+      fruitShine(g, cl2[0], cl2[1], r * 0.42);
+    }
+    g.fillStyle = '#43a047';
+    g.beginPath(); g.ellipse(cx - s * 0.12, cy - r * 0.75, s * 0.1, s * 0.05, -0.6, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(cx + s * 0.12, cy - r * 0.75, s * 0.1, s * 0.05, 0.6, 0, Math.PI * 2); g.fill();
+  }
+}
+const fruitSpriteCache = {grid: 0, map: {}};
+function fruitSprite(type) {
+  if (fruitSpriteCache.grid !== GRID) {
+    fruitSpriteCache.grid = GRID;
+    fruitSpriteCache.map = {};
+  }
+  if (!fruitSpriteCache.map[type]) {
+    const s = Math.max(10, Math.round(GRID));
+    const c = document.createElement('canvas');
+    c.width = s * 2;
+    c.height = s * 2;
+    const g2 = c.getContext('2d');
+    g2.scale(2, 2);
+    drawFruitArt(type, g2, s);
+    fruitSpriteCache.map[type] = c;
+  }
+  return fruitSpriteCache.map[type];
+}
 function fillFruitShape(type, px, py, size) {
   if (type === 'rainbow') {
     const g = ctx.createLinearGradient(px, py, px + size, py + size);
@@ -1170,23 +1450,17 @@ function fillFruitShape(type, px, py, size) {
       g.addColorStop(i / 5, 'hsl(' + Math.floor((t * 60 + i * 60) % 360) + ',85%,55%)');
     }
     ctx.fillStyle = g;
-  } else {
-    ctx.fillStyle = FRUIT_STYLES[type];
+    ctx.beginPath();
+    ctx.arc(px + size / 2, py + size / 2, size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath();
+    ctx.arc(px + size * 0.37, py + size * 0.34, size * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+    return;
   }
-  ctx.fillRect(px, py, size, size);
-  if (type === 'bomb' || type === 'shield') {
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(px + 1 * PX, py + 1 * PX, size - 2 * PX, size - 2 * PX);
-  } else if (type === 'double') {
-    ctx.strokeStyle = 'rgba(246,190,0,' + (0.4 + 0.6 * Math.abs(Math.sin(Date.now() / 200))).toFixed(3) + ')';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(px + 1 * PX, py + 1 * PX, size - 2 * PX, size - 2 * PX);
-  } else if (type === 'rainbow' || type === 'clock' || type === 'ghost' || type === 'magnet' || type === 'freeze') {
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(px + 0.5 * PX, py + 0.5 * PX, size - 1 * PX, size - 1 * PX);
-  }
+  const sp = fruitSprite(type);
+  ctx.drawImage(sp, px, py, size, size);
 }
 
 let SK = SKINS.classic;
