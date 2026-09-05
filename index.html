@@ -2091,7 +2091,55 @@ function drawShadow() {
   sctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
+let padDirCd = 0;
+let padPrevDir = null;
+let padPrevBtn = {};
+function pollPad() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let gp = null;
+  for (const p of pads) { if (p && p.connected) { gp = p; break; } }
+  if (!gp) { padPrevDir = null; padPrevBtn = {}; return; }
+  const now = Date.now();
+  let d = null;
+  const btn = i => gp.buttons[i] && gp.buttons[i].pressed;
+  if (btn(12)) d = {x: 0, y: -1};
+  else if (btn(13)) d = {x: 0, y: 1};
+  else if (btn(14)) d = {x: -1, y: 0};
+  else if (btn(15)) d = {x: 1, y: 0};
+  else {
+    const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
+    if (Math.abs(ax) > 0.5 || Math.abs(ay) > 0.5) {
+      d = Math.abs(ax) > Math.abs(ay) ? {x: ax > 0 ? 1 : -1, y: 0} : {x: 0, y: ay > 0 ? 1 : -1};
+    }
+  }
+  const playing = started && !cleared && !settled && !paused;
+  if (d) {
+    const key = d.x + ',' + d.y;
+    if (key !== padPrevDir) {
+      padPrevDir = key;
+      padDirCd = now + 140;
+      if (playing) applyDir(d);
+    } else if (now > padDirCd) {
+      padDirCd = now + 150;
+      if (playing) applyDir(d);
+    }
+  } else {
+    padPrevDir = null;
+  }
+  const bA = btn(0), bStart = btn(9);
+  if (bA && !padPrevBtn.a) {
+    if (started && (settled || cleared)) { reset(); started = true; if (soundOn) ensureAudio(); }
+  }
+  if (bStart && !padPrevBtn.start) {
+    if (started && !cleared && !settled && !bookOpen && !achOpen && !replayOpen) togglePause();
+  }
+  padPrevBtn = {a: bA, start: bStart};
+}
+
+window.addEventListener('gamepadconnected', () => showToast('手柄已连接:十字键移动 · A 重开 · Start 暂停'));
+
 function frame() {
+  pollPad();
   drawShadow();
   draw();
   requestAnimationFrame(frame);
