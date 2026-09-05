@@ -1043,6 +1043,7 @@ function step2() {
     head2.x = 0;
     const cur = layers[old2[0].z];
     if (!(cur.gate && !cur.gate.open)) { head2.z += 1; ensureLayer(head2.z, head2); }
+    else showHint('gate2', 'P2 提示:大门锁定中,吃果 ' + cur.gate.eaten + '/' + cur.gate.needed + ' 才能开');
   }
   if (head2.y < 0) head2.y = ROWS - 1;
   if (head2.y >= ROWS) head2.y = 0;
@@ -1050,12 +1051,13 @@ function step2() {
   const eatsHere2 = layers[head2.z].fruits.some(f => f.x === head2.x && f.y === head2.y);
   const body2 = eatsHere2 ? old2 : old2.slice(0, -1);
   const others = body2.concat(snake);
+  const ghosting2 = Date.now() < ghostUntil;
   const hitWall2 = layers[head2.z].walls.some(w => w.x === head2.x && w.y === head2.y);
   if (hitWall2) {
     head2.z += 1;
     ensureLayer(head2.z, head2);
   }
-  climbIfColliding(head2, others);
+  if (!ghosting2) climbIfColliding(head2, others);
 
   const eaten2 = layers[head2.z].fruits.find(f => f.x === head2.x && f.y === head2.y);
   if (eaten2) {
@@ -1064,10 +1066,10 @@ function step2() {
     if (eff2 === 'up') {
       head2.z += 1;
       ensureLayer(head2.z, head2);
-      climbIfColliding(head2, others);
+      if (!ghosting2) climbIfColliding(head2, others);
     } else if (eff2 === 'down' && head2.z > 1) {
       head2.z -= 1;
-      climbIfColliding(head2, others);
+      if (!ghosting2) climbIfColliding(head2, others);
     }
     snake2 = [head2, ...old2];
     eat(eaten2, eatenZ2, eff2, 'p2');
@@ -1081,6 +1083,15 @@ function step2() {
       loseLife('P2 踩中陷阱');
       playSound('bomb');
     }
+  }
+
+  if (Date.now() < magnetUntil && !settled) {
+    const layM2 = layers[snake2[0].z];
+    let pulled2;
+    do {
+      pulled2 = layM2.fruits.find(f => Math.abs(f.x - snake2[0].x) <= 2 && Math.abs(f.y - snake2[0].y) <= 2);
+      if (pulled2) eat(pulled2, snake2[0].z, undefined, 'p2');
+    } while (pulled2 && Date.now() < magnetUntil && !settled);
   }
 }
 
@@ -1644,6 +1655,21 @@ function draw() {
       fogGrad.addColorStop(1, 'rgba(8,10,18,0.96)');
       ctx.fillStyle = fogGrad;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    if (twoPlayer && snake2.length) {
+      const h2 = snake2.find(s => s.z === z);
+      if (!h2) {
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = SK.p2 || '#555';
+        for (const s of snake2) {
+          if (s.z === z) continue;
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(s.x * GRID + 4 * PX, s.y * GRID + 4 * PX, GRID - 8 * PX, GRID - 8 * PX, 5 * PX);
+          else ctx.rect(s.x * GRID + 4 * PX, s.y * GRID + 4 * PX, GRID - 8 * PX, GRID - 8 * PX);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
     }
   }
 
