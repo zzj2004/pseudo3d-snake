@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="description" content="伪三维爬层贪吃蛇:撞上自己爬上一层。六种模式、20 种果子、双人合作、隐藏皮肤与手柄支持,单机免费。">
+<meta property="og:title" content="蛇行千层 - 伪三维爬层贪吃蛇">
+<meta property="og:description" content="撞上自己,爬上一层。六种模式 · 20 种果子 · 双人合作 · 手柄支持">
 <title>贪吃蛇</title>
 <style>
   body {
@@ -104,6 +107,38 @@
   </div>
 </div>
 <script>
+(function favicon() {
+  try {
+    const fc = document.createElement('canvas');
+    fc.width = 64; fc.height = 64;
+    const fx = fc.getContext('2d');
+    fx.fillStyle = '#f6f7f2';
+    fx.fillRect(0, 0, 64, 64);
+    fx.strokeStyle = '#000';
+    fx.lineWidth = 9;
+    fx.lineCap = 'round';
+    fx.lineJoin = 'round';
+    fx.beginPath();
+    fx.moveTo(12, 50); fx.lineTo(24, 28); fx.lineTo(38, 42); fx.lineTo(52, 22);
+    fx.stroke();
+    fx.fillStyle = '#000';
+    fx.beginPath(); fx.arc(52, 22, 8, 0, Math.PI * 2); fx.fill();
+    fx.fillStyle = '#fff';
+    fx.beginPath(); fx.arc(54, 20, 2.5, 0, Math.PI * 2); fx.fill();
+    fx.fillStyle = '#f00';
+    fx.fillRect(9, 9, 13, 13);
+    fx.strokeStyle = '#fff';
+    fx.lineWidth = 2;
+    fx.strokeRect(11, 11, 9, 9);
+    const link = document.createElement('link');
+    link.rel = 'icon';
+    link.href = fc.toDataURL('image/png');
+    document.head.appendChild(link);
+  } catch (e) {}
+})();
+setInterval(() => {
+  document.title = (started && !settled && score > 0) ? ('蛇行千层 · ' + score + ' 分') : '贪吃蛇';
+}, 1000);
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const COLS = 20;
@@ -2113,15 +2148,16 @@ function pollPad() {
     }
   }
   const playing = started && !cleared && !settled && !paused;
+  const useP2 = twoPlayer && snake2.length > 0;
   if (d) {
     const key = d.x + ',' + d.y;
     if (key !== padPrevDir) {
       padPrevDir = key;
       padDirCd = now + 140;
-      if (playing) applyDir(d);
+      if (playing) { if (useP2) applyDir2(d); else applyDir(d); }
     } else if (now > padDirCd) {
       padDirCd = now + 150;
-      if (playing) applyDir(d);
+      if (playing) { if (useP2) applyDir2(d); else applyDir(d); }
     }
   } else {
     padPrevDir = null;

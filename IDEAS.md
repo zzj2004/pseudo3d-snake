@@ -480,3 +480,11 @@
 - 状态: 已实现 v87,待老板试玩验收 + opencode 复查
 - 实现(Zcode, v87): **Gamepad API 即插即用**——插任意标准手柄(Xbox/PS/北通等)自动生效,连接时 toast"手柄已连接:十字键移动 · A 重开 · Start 暂停";**十字键(12–15)或左摇杆(死区 0.5,主轴优先)→ applyDir(享受幽灵键缓冲与方向反转)**;连发节流:新方向立发+140ms 冷却,按住每 150ms 重复(适配格步制);**A(0)=结算/通关后重开**;**Start(9)=暂停/继续**(面板打开时不响应);手柄输入在 frame() 每帧轮询。真实手柄无需任何配置。
 - Tabbit 实测(Zcode, 2026-09-05): 注入虚拟手柄(navigator.getGamepads 覆盖)——手动 pollPad 转向 ✓;**rAF 帧循环自动轮询两帧内 nextDir 生效(autoPollWorks=true)**;初次跨 evaluate 测试失败为 Tabbit 状态隔离怪癖(单上下文验证排除);零 JS 报错。真实手柄待老板实体测试。
+
+### 打磨四连:favicon + 动态标题 + meta + 双人手柄 P2(老板"继续")
+
+- 提出人: Zcode(老板"继续")
+- 日期: 2026-09-05
+- 状态: 已实现 v88,待老板试玩验收 + opencode 复查
+- 实现(Zcode, v88): ① **程序化 favicon**:canvas 画蛇形折线+红果 64×64 → dataURL 注入 link icon(项目首个图标,顺带消灭常年 favicon 404);② **动态标签页标题**:每秒同步"蛇行千层 · N 分"(未开始/结算回落"贪吃蛇"),挂机摸鱼党的晒分窗口;③ **社交 meta**:description + og:title/og:description(分享链接落地预览);④ **双人模式手柄自动接管 P2**:twoPlayer 时手柄方向写入 applyDir2(键盘方向键仍归 P1),一键盘一手柄的二人局成立。
+- Tabbit 实测(Zcode, 2026-09-05): favicon 注入成功(PNG dataURL);标题 1.2 秒内变"蛇行千层 · 321 分";双人+虚拟手柄:摇杆方向写入 nextDir2(padControlsP2=true);零 JS 报错。
