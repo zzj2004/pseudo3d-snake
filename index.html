@@ -362,6 +362,12 @@ let twoPlayer = false;
 let snake2 = [];
 let dir2 = {x: -1, y: 0};
 let nextDir2 = dir2;
+let prevSnake = [];
+let prevSnake2 = [];
+let lastStepAt = 0;
+let lastStep2At = 0;
+let curSpeed = 150;
+let overlayAt = 0;
 let particles = [];
 let shakeUntil = 0;
 let runMaxCombo = 0;
@@ -803,6 +809,7 @@ function step() {
   }
   flushKeyBuffer();
   dir = nextDir;
+  prevSnake = snake.map(s => ({x: s.x, y: s.y, z: s.z}));
 
   const old = snake.map(s => ({x: s.x, y: s.y, z: s.z}));
   const head = {x: old[0].x + dir.x, y: old[0].y + dir.y, z: old[0].z};
@@ -895,6 +902,7 @@ function step() {
     maxZRun = snake[0].z;
     checkAch();
   }
+  lastStepAt = Date.now();
   if (mode === 'endless' && bestGhost && stepCount === bestGhost.path.length) {
     showToast('影子已到它的终点,而你还在飞!');
     playSound('ach');
@@ -931,6 +939,7 @@ function eat(f, z, eff, who) {
   if (Math.floor(score / 100) > Math.floor(prevScore / 100)) showToast(score + ' 分!');
   if (score >= 999999999 && mode === 'endless') {
     cleared = true;
+    overlayAt = Date.now();
     playSound('clear');
   }
   save.stats.fruits[f.type] = (save.stats.fruits[f.type] || 0) + 1;
@@ -1034,6 +1043,7 @@ function eat(f, z, eff, who) {
 function step2() {
   if (!snake2.length) return;
   dir2 = nextDir2;
+  prevSnake2 = snake2.map(s => ({x: s.x, y: s.y, z: s.z}));
   const old2 = snake2.map(s => ({x: s.x, y: s.y, z: s.z}));
   const head2 = {x: old2[0].x + dir2.x, y: old2[0].y + dir2.y, z: old2[0].z};
   if (head2.x < 0) {
@@ -1093,6 +1103,7 @@ function step2() {
       if (pulled2) eat(pulled2, snake2[0].z, undefined, 'p2');
     } while (pulled2 && Date.now() < magnetUntil && !settled);
   }
+  lastStep2At = Date.now();
 }
 
 function loseLife(msg) {
@@ -1130,6 +1141,7 @@ function burst(cx, cy, color, n) {
 function settle(reason) {
   settled = true;
   settleReason = reason;
+  overlayAt = Date.now();
   save.stats.playCount = (save.stats.playCount || 0) + 1;
   if (reason === 'dead') save.stats.deaths = (save.stats.deaths || 0) + 1;
   if (mode === 'daily') {
@@ -1811,12 +1823,26 @@ function draw() {
 
   const INSET = 3 * PX;
   const RADIUS = 5 * PX;
-  const onLayer = snake.filter(s => s.z === z);
+  const it = Math.max(0, Math.min(1, (Date.now() - lastStepAt) / Math.max(50, curSpeed)));
+  const lerpSnake = snake.map((s, i) => {
+    const p = prevSnake[i] || prevSnake[prevSnake.length - 1] || s;
+    if (p.z !== s.z) return {x: s.x, y: s.y, z: s.z};
+    if (Math.abs(p.x - s.x) + Math.abs(p.y - s.y) !== 1) return {x: s.x, y: s.y, z: s.z};
+    return {x: p.x + (s.x - p.x) * it, y: p.y + (s.y - p.y) * it, z: s.z};
+  });
+  const onLayer = lerpSnake.filter(s => s.z === z);
 
   if (twoPlayer && snake2.length) {
     const p2col = SK.p2 || '#555';
     ctx.fillStyle = p2col;
-    const on2 = snake2.filter(s => s.z === z);
+    const it2 = Math.max(0, Math.min(1, (Date.now() - lastStep2At) / Math.max(50, curSpeed)));
+    const lerp2 = snake2.map((s, i) => {
+      const p = prevSnake2[i] || prevSnake2[prevSnake2.length - 1] || s;
+      if (p.z !== s.z) return s;
+      if (Math.abs(p.x - s.x) + Math.abs(p.y - s.y) !== 1) return s;
+      return {x: p.x + (s.x - p.x) * it2, y: p.y + (s.y - p.y) * it2, z: s.z};
+    });
+    const on2 = lerp2.filter(s => s.z === z);
     for (const s of on2) {
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(s.x * GRID + 4 * PX, s.y * GRID + 4 * PX, GRID - 8 * PX, GRID - 8 * PX, 5 * PX);
@@ -1865,7 +1891,7 @@ function draw() {
     ctx.fill();
   }
 
-  const h = snake[0];
+  const h = onLayer[0] || snake[0];
   const cx = h.x * GRID + GRID / 2;
   const cy = h.y * GRID + GRID / 2;
   const fx = cx + dir.x * 7 * PX;
@@ -1895,10 +1921,14 @@ function draw() {
   }
   ctx.strokeStyle = SK.tongue;
   ctx.lineWidth = 2;
+  const nowT = Date.now();
+  const wig = Math.sin(nowT / 130) * 2.2 * PX;
+  const tx = cx + dir.x * 15 * PX - dir.y * wig;
+  const ty = cy + dir.y * 15 * PX + dir.x * wig;
+  ctx.strokeStyle = SK.tongue;
+  ctx.lineWidth = 2 * PX;
   ctx.beginPath();
-  const tx = cx + dir.x * 15 * PX;
-  const ty = cy + dir.y * 15 * PX;
-  ctx.moveTo(cx + dir.x * 9 * PX, cy + dir.y * 9 * PX);
+  ctx.moveTo(cx + dir.x * 9 * PX - dir.y * wig * 0.5, cy + dir.y * 9 * PX + dir.x * wig * 0.5);
   ctx.lineTo(tx, ty);
   ctx.moveTo(tx, ty);
   ctx.lineTo(tx + dir.x * 2.5 * PX - dir.y * 2.5 * PX, ty + dir.y * 2.5 * PX + dir.x * 2.5 * PX);
@@ -1914,7 +1944,10 @@ function draw() {
   ctx.globalAlpha = 1;
 
   for (const f of layers[z].fruits) {
-    fillFruitShape(f.type, f.x * GRID, f.y * GRID, GRID);
+    const ph = (f.x * 7 + f.y * 13) % 628 / 100;
+    const bob = Math.sin(nowT / 480 + ph) * 1.6 * PX;
+    const fs2 = GRID * (1 + Math.sin(nowT / 480 + ph) * 0.045);
+    fillFruitShape(f.type, f.x * GRID + (GRID - fs2) / 2, f.y * GRID + (GRID - fs2) / 2 + bob, fs2);
   }
 
   if (mode === 'fog' && started && !cleared && !settled) {
@@ -2108,6 +2141,8 @@ function draw() {
   } else if (replayOpen) {
     drawReplay();
   } else if (settled) {
+    const oa = Math.min(1, (Date.now() - overlayAt) / 300);
+    ctx.globalAlpha = oa;
     ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = SK.text;
@@ -2119,6 +2154,7 @@ function draw() {
     ctx.fillText(score > bestAtStart ? '新纪录!' : '最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 18);
     ctx.fillText('到达第 ' + maxZRun + ' 层 · 最长连击 ×' + runMaxCombo + ' · 吃果 ' + runFruits + ' 个', canvas.width / 2, canvas.height / 2 + 42);
     ctx.fillText('按 R 或点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 66);
+    ctx.globalAlpha = 1;
     if (mode === 'daily' && (save.stats.dailyLog || []).length) {
       const log = save.stats.dailyLog;
       const mx = Math.max(50, ...log.map(e2 => e2.s));
@@ -2233,6 +2269,10 @@ function reset() {
   shakeUntil = 0;
   runMaxCombo = 0;
   runFruits = 0;
+  prevSnake = [];
+  prevSnake2 = [];
+  lastStepAt = Date.now();
+  overlayAt = 0;
   layers = {};
   if (twoPlayer) {
     snake2 = [
@@ -2422,6 +2462,7 @@ function tick() {
   if (Date.now() < fastUntil) speed -= 60;
   if (Date.now() < slowUntil) speed += 60;
   speed = Math.max(75, Math.min(600, speed));
+  curSpeed = speed;
   setTimeout(tick, speed);
 }
 tick();
