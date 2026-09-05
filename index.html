@@ -95,6 +95,7 @@
     <button id="achBtn">成就</button>
     <button id="shareBtn">分享</button>
     <button id="replayBtn">回放</button>
+    <button id="dualBtn">双人:关</button>
     <button id="skinBtn">皮肤:经典</button>
     <label for="speed">速度:</label>
     <input type="range" id="speed" min="80" max="300" step="10" value="150">
@@ -308,6 +309,10 @@ let ghostRun = [];
 let stepCount = 0;
 let konamiBuf = [];
 let konamiUsed = false;
+let twoPlayer = false;
+let snake2 = [];
+let dir2 = {x: -1, y: 0};
+let nextDir2 = dir2;
 let particles = [];
 let shakeUntil = 0;
 let runMaxCombo = 0;
@@ -332,9 +337,9 @@ function showHint(key, text) {
 
 const SAVE_KEY = 'snake3d_save';
 const SKINS = {
-  classic: {name: '经典', bg: '#eee', board: '#fff', border: '#000', text: '#000', overlay: 'rgba(255,255,255,0.92)', snake: '#000', head: '#000', tongue: '#d00', wallFill: '#fff', wallFrame: '#000', wallHatch: '#bbb', trapPit: '#222', trapSpike: '#aaa', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
-  bamboo: {name: '翠玉竹林', bg: '#dce8d2', board: '#eef7ea', border: '#4e7d46', text: '#2b4a26', overlay: 'rgba(238,247,234,0.92)', snake: '#2e8b4e', head: '#1f6e3c', tongue: '#e0453a', wallFill: '#f8fcf4', wallFrame: '#4e7d46', wallHatch: '#b9d0ae', trapPit: '#2a3d24', trapSpike: '#8fae7f', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
-  cyber: {name: '赛博2077', bg: '#04060d', board: '#0a0e1a', border: '#00e5ff', text: '#d8f6ff', overlay: 'rgba(6,10,20,0.88)', snake: '#00e5ff', head: '#7df9ff', tongue: '#ff2d95', wallFill: '#0e1c2e', wallFrame: '#1d5b74', wallHatch: '#16455a', trapPit: '#14263e', trapSpike: '#6fa8c9', fastCol: '#4dff9d', slowCol: '#5db8ff', dblCol: '#ffc04d', ghostCol: '#9aa8b8', comboCol: '#ffb300', glow: true}
+  classic: {name: '经典', bg: '#eee', board: '#fff', border: '#000', text: '#000', overlay: 'rgba(255,255,255,0.92)', snake: '#000', head: '#000', tongue: '#d00', p2: '#8a6a00', wallFill: '#fff', wallFrame: '#000', wallHatch: '#bbb', trapPit: '#222', trapSpike: '#aaa', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
+  bamboo: {name: '翠玉竹林', bg: '#dce8d2', board: '#eef7ea', border: '#4e7d46', text: '#2b4a26', overlay: 'rgba(238,247,234,0.92)', snake: '#2e8b4e', head: '#1f6e3c', tongue: '#e0453a', p2: '#b8860b', wallFill: '#f8fcf4', wallFrame: '#4e7d46', wallHatch: '#b9d0ae', trapPit: '#2a3d24', trapSpike: '#8fae7f', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
+  cyber: {name: '赛博2077', bg: '#04060d', board: '#0a0e1a', border: '#00e5ff', text: '#d8f6ff', overlay: 'rgba(6,10,20,0.88)', snake: '#00e5ff', head: '#7df9ff', tongue: '#ff2d95', p2: '#ff2d95', wallFill: '#0e1c2e', wallFrame: '#1d5b74', wallHatch: '#16455a', trapPit: '#14263e', trapSpike: '#6fa8c9', fastCol: '#4dff9d', slowCol: '#5db8ff', dblCol: '#ffc04d', ghostCol: '#9aa8b8', comboCol: '#ffb300', glow: true}
 };
 const FRUIT_DESC = {
   normal: '普通 +1 分', fast: '加速 6 秒', slow: '减速 6 秒', grow: '蛇身 +3',
@@ -523,6 +528,17 @@ bgmBtn.addEventListener('click', () => {
   if (bgmOn) bgmStart(); else bgmStop();
 });
 if (bgmOn) bgmBtn.textContent = '音乐:开';
+const dualBtn = document.getElementById('dualBtn');
+dualBtn.addEventListener('click', () => {
+  if (started && !cleared && !settled) {
+    showToast('本局结束后可切换双人');
+    return;
+  }
+  twoPlayer = !twoPlayer;
+  dualBtn.textContent = twoPlayer ? '双人:开' : '双人:关';
+  reset();
+  if (twoPlayer) showToast('双人合作:P2 使用 W/A/S/D');
+});
 const dpadEl = document.getElementById('dpad');
 function updateDpad() {
   dpadEl.style.display = window.innerWidth < 700 ? 'grid' : 'none';
@@ -713,13 +729,14 @@ function step() {
 
   const eatsHere = layers[head.z].fruits.some(f => f.x === head.x && f.y === head.y);
   const body = eatsHere ? old : old.slice(0, -1);
+  const extra = twoPlayer && snake2.length ? snake2 : [];
   const ghosting = Date.now() < ghostUntil;
   const hitWall = layers[head.z].walls.some(w => w.x === head.x && w.y === head.y);
   if (hitWall) {
     head.z += 1;
     ensureLayer(head.z, head);
   }
-  if (!ghosting) climbIfColliding(head, body);
+  if (!ghosting) climbIfColliding(head, body.concat(extra));
   if (head.z > old[0].z) {
     showHint(hitWall ? 'wall' : 'climb', hitWall ? '撞到墙→爬上一层!' : '撞到自己→爬上一层!');
   }
@@ -731,10 +748,10 @@ function step() {
     if (eff === 'up') {
       head.z += 1;
       ensureLayer(head.z, head);
-      climbIfColliding(head, old);
+      climbIfColliding(head, old.concat(extra));
     } else if (eff === 'down' && head.z > 1) {
       head.z -= 1;
-      climbIfColliding(head, old);
+      climbIfColliding(head, old.concat(extra));
     }
     snake = [head, ...old];
     eat(eaten, eatenZ, eff);
@@ -763,9 +780,11 @@ function step() {
     let pulled;
     do {
       pulled = layM.fruits.find(f => Math.abs(f.x - snake[0].x) <= 2 && Math.abs(f.y - snake[0].y) <= 2);
-      if (pulled) eat(pulled, snake[0].z);
+      if (pulled) eat(pulled, snake[0].z, undefined, 'p1');
     } while (pulled && Date.now() < magnetUntil && !settled);
   }
+
+  if (twoPlayer) step2();
 
   if (snake[0].z > maxZRun) {
     maxZRun = snake[0].z;
@@ -780,8 +799,9 @@ function step() {
   stepCount++;
 }
 
-function eat(f, z, eff) {
+function eat(f, z, eff, who) {
   if (eff === undefined) eff = f.type;
+  const me = (who === 'p2' && snake2.length) ? snake2 : snake;
   combo++;
   runMaxCombo = Math.max(runMaxCombo, combo);
   runFruits++;
@@ -832,14 +852,14 @@ function eat(f, z, eff) {
 
   const grow = {normal: 0, fast: 0, slow: 0, grow: 2, shrink: -3, reverse: 0, up: 0, down: 0, rainbow: 0, gold: 0, teleport: 0, clock: 0, bomb: 0, double: 0, ghost: 0, scissors: 0, shield: 0, magnet: 0, freeze: 0, harvest: 0}[eff];
   if (grow > 0) {
-    const tail = snake[snake.length - 1];
-    for (let i = 0; i < grow; i++) snake.push({x: tail.x, y: tail.y, z: tail.z});
+    const tail = me[me.length - 1];
+    for (let i = 0; i < grow; i++) me.push({x: tail.x, y: tail.y, z: tail.z});
   } else {
-    for (let i = 0; i < -grow && snake.length > 2; i++) snake.pop();
+    for (let i = 0; i < -grow && me.length > 2; i++) me.pop();
   }
   if (f.type === 'scissors') {
-    const target = Math.max(2, Math.floor(snake.length / 2));
-    while (snake.length > target) snake.pop();
+    const target = Math.max(2, Math.floor(me.length / 2));
+    while (me.length > target) me.pop();
     showHint('scissors', '蛇身减半!');
   }
 
@@ -888,8 +908,8 @@ function eat(f, z, eff) {
       layers[z2].walls.some(w => w.x === p.x && w.y === p.y) ||
       layers[z2].traps.some(t => t.x === p.x && t.y === p.y)
     );
-    snake[0].x = p.x;
-    snake[0].y = p.y;
+    me[0].x = p.x;
+    me[0].y = p.y;
     showToast('传送!');
     playSound('teleport');
   } else if (f.type === 'bomb') {
@@ -904,6 +924,59 @@ function eat(f, z, eff) {
   } else if (f.type === 'reverse') playSound('reverse');
   else if (f.type !== 'up' && f.type !== 'down') playSound('eat', f.type);
   checkAch();
+}
+
+function step2() {
+  if (!snake2.length) return;
+  dir2 = nextDir2;
+  const old2 = snake2.map(s => ({x: s.x, y: s.y, z: s.z}));
+  const head2 = {x: old2[0].x + dir2.x, y: old2[0].y + dir2.y, z: old2[0].z};
+  if (head2.x < 0) {
+    head2.x = COLS - 1;
+    if (head2.z > 1) { head2.z -= 1; ensureLayer(head2.z, head2); }
+  } else if (head2.x >= COLS) {
+    head2.x = 0;
+    const cur = layers[old2[0].z];
+    if (!(cur.gate && !cur.gate.open)) { head2.z += 1; ensureLayer(head2.z, head2); }
+  }
+  if (head2.y < 0) head2.y = ROWS - 1;
+  if (head2.y >= ROWS) head2.y = 0;
+
+  const eatsHere2 = layers[head2.z].fruits.some(f => f.x === head2.x && f.y === head2.y);
+  const body2 = eatsHere2 ? old2 : old2.slice(0, -1);
+  const others = body2.concat(snake);
+  const hitWall2 = layers[head2.z].walls.some(w => w.x === head2.x && w.y === head2.y);
+  if (hitWall2) {
+    head2.z += 1;
+    ensureLayer(head2.z, head2);
+  }
+  climbIfColliding(head2, others);
+
+  const eaten2 = layers[head2.z].fruits.find(f => f.x === head2.x && f.y === head2.y);
+  if (eaten2) {
+    const eatenZ2 = head2.z;
+    const eff2 = eaten2.type === 'rainbow' ? RAINBOW_POOL[Math.floor(rand() * RAINBOW_POOL.length)] : eaten2.type;
+    if (eff2 === 'up') {
+      head2.z += 1;
+      ensureLayer(head2.z, head2);
+      climbIfColliding(head2, others);
+    } else if (eff2 === 'down' && head2.z > 1) {
+      head2.z -= 1;
+      climbIfColliding(head2, others);
+    }
+    snake2 = [head2, ...old2];
+    eat(eaten2, eatenZ2, eff2, 'p2');
+  } else {
+    snake2 = [head2, ...old2.slice(0, -1)];
+  }
+
+  if (Date.now() >= invincibleUntil && Date.now() >= freezeUntil) {
+    const lay2 = layers[snake2[0].z];
+    if (lay2.traps.some(t => t.x === snake2[0].x && t.y === snake2[0].y)) {
+      loseLife('P2 踩中陷阱');
+      playSound('bomb');
+    }
+  }
 }
 
 function loseLife(msg) {
@@ -1320,6 +1393,29 @@ function draw() {
   const RADIUS = 5 * PX;
   const onLayer = snake.filter(s => s.z === z);
 
+  if (twoPlayer && snake2.length) {
+    const p2col = SK.p2 || '#555';
+    ctx.fillStyle = p2col;
+    const on2 = snake2.filter(s => s.z === z);
+    for (const s of on2) {
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(s.x * GRID + 4 * PX, s.y * GRID + 4 * PX, GRID - 8 * PX, GRID - 8 * PX, 5 * PX);
+      else ctx.rect(s.x * GRID + 4 * PX, s.y * GRID + 4 * PX, GRID - 8 * PX, GRID - 8 * PX);
+      ctx.fill();
+    }
+    if (on2.length) {
+      ctx.fillStyle = SK.head;
+      ctx.beginPath();
+      ctx.arc(on2[0].x * GRID + GRID / 2, on2[0].y * GRID + GRID / 2, 8 * PX, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(on2[0].x * GRID + GRID / 2 - 3 * PX, on2[0].y * GRID + GRID / 2 - 2 * PX, 2.2 * PX, 0, Math.PI * 2);
+      ctx.arc(on2[0].x * GRID + GRID / 2 + 3 * PX, on2[0].y * GRID + GRID / 2 - 2 * PX, 2.2 * PX, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   const blink = Date.now() < invincibleUntil && Math.floor(Date.now() / 120) % 2 === 0;
   const ghosting = Date.now() < ghostUntil;
   ctx.globalAlpha = blink ? 0.25 : (ghosting ? 0.45 : 1);
@@ -1667,6 +1763,19 @@ function reset() {
   runMaxCombo = 0;
   runFruits = 0;
   layers = {};
+  if (twoPlayer) {
+    snake2 = [
+      {x: 10, y: 14, z: 1},
+      {x: 11, y: 14, z: 1},
+      {x: 12, y: 14, z: 1},
+      {x: 13, y: 14, z: 1},
+      {x: 14, y: 14, z: 1}
+    ];
+    dir2 = {x: -1, y: 0};
+    nextDir2 = dir2;
+  } else {
+    snake2 = [];
+  }
   ensureLayer(1);
   paused = false;
   bookOpen = false;
@@ -1677,6 +1786,10 @@ function reset() {
 function applyDir(d) {
   if (controlsReversed()) d = {x: -d.x, y: -d.y};
   if (d.x !== -dir.x || d.y !== -dir.y) nextDir = d;
+}
+function applyDir2(d) {
+  if (controlsReversed()) d = {x: -d.x, y: -d.y};
+  if (d.x !== -dir2.x || d.y !== -dir2.y) nextDir2 = d;
 }
 
 document.addEventListener('keydown', e => {
@@ -1739,6 +1852,10 @@ document.addEventListener('keydown', e => {
   let d = keyMap[e.code];
   if (!d) return;
   e.preventDefault();
+  if (twoPlayer && snake2.length) {
+    const km2 = {KeyW: {x: 0, y: -1}, KeyS: {x: 0, y: 1}, KeyA: {x: -1, y: 0}, KeyD: {x: 1, y: 0}};
+    if (km2[e.code]) { applyDir2(km2[e.code]); return; }
+  }
   applyDir(d);
 });
 
@@ -1775,17 +1892,21 @@ function drawShadow() {
   sctx.scale(S, S);
   const src = started ? snake : demoSnake;
   const z = src[0].z;
-  sctx.fillStyle = SK.snake;
-  for (const s of src) {
-    if (s.z !== z) continue;
-    const bx = s.x * GRID + 2;
-    const by = s.y * GRID + 2;
-    sctx.globalAlpha = SK.glow ? 0.018 : 0.03;
-    shadowBlob(bx, by, 16);
-    sctx.globalAlpha = SK.glow ? 0.03 : 0.045;
-    shadowBlob(bx, by, 7);
-    sctx.globalAlpha = SK.glow ? 0.05 : 0.07;
-    shadowBlob(bx, by, 0);
+  const srcs = (twoPlayer && snake2.length && started) ? [src, snake2] : [src];
+  for (const arr of srcs) {
+    const zz = arr[0].z;
+    sctx.fillStyle = SK.snake;
+    for (const s of arr) {
+      if (s.z !== zz) continue;
+      const bx = s.x * GRID + 2;
+      const by = s.y * GRID + 2;
+      sctx.globalAlpha = SK.glow ? 0.018 : 0.03;
+      shadowBlob(bx, by, 16);
+      sctx.globalAlpha = SK.glow ? 0.03 : 0.045;
+      shadowBlob(bx, by, 7);
+      sctx.globalAlpha = SK.glow ? 0.05 : 0.07;
+      shadowBlob(bx, by, 0);
+    }
   }
   const lay = layers[z];
   if (lay) {
