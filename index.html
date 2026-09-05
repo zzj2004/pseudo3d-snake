@@ -415,7 +415,7 @@ const ACH = [
   {id: 'ghost_pass', name: '超越影子', desc: '无尽分数超过影子纪录'}
 ];
 function defaultSave() {
-  return {v: 2, best: {endless: 0, survival: 0, timed: 0, daily: 0, fog: 0, zen: 0}, sound: false, bgm: false, stats: {climbs: 0, descents: 0, fruits: {}, gates: 0, goldLives: 0, maxCombo: 0, playCount: 0, deaths: 0, daily: {last: '', streak: 0}}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic', ach: {}};
+  return {v: 2, best: {endless: 0, survival: 0, timed: 0, daily: 0, fog: 0, zen: 0}, sound: false, bgm: false, stats: {climbs: 0, descents: 0, fruits: {}, gates: 0, goldLives: 0, maxCombo: 0, playCount: 0, deaths: 0, daily: {last: '', streak: 0}, dailyLog: []}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic', ach: {}};
 }
 function loadSave() {
   try {
@@ -451,6 +451,7 @@ function loadSave() {
         playCount: Number(s.stats.playCount) || 0,
         deaths: Number(s.stats.deaths) || 0,
         daily: (s.stats.daily && typeof s.stats.daily === 'object') ? {last: String(s.stats.daily.last || ''), streak: Number(s.stats.daily.streak) || 0} : {last: '', streak: 0},
+        dailyLog: (Array.isArray(s.stats.dailyLog) ? s.stats.dailyLog : []).filter(e2 => e2 && e2.d && typeof e2.s === 'number').slice(-7),
         fruits: (s.stats.fruits && typeof s.stats.fruits === 'object') ? s.stats.fruits : {}
       },
       book: (s.book && typeof s.book === 'object') ? s.book : {},
@@ -1073,6 +1074,10 @@ function settle(reason) {
       d.last = today;
       if (d.streak >= 2) showToast('每日挑战连续打卡 ' + d.streak + ' 天!');
     }
+    const log = save.stats.dailyLog = save.stats.dailyLog || [];
+    const ex = log.find(e2 => e2.d === today);
+    if (ex) { if (score > ex.s) ex.s = score; }
+    else { log.push({d: today, s: score}); if (log.length > 7) log.shift(); }
   }
   if (mode === 'endless' && score > 0 && ghostRun.length > 30 &&
       (!bestGhost || score > bestGhost.score)) {
@@ -1738,6 +1743,26 @@ function draw() {
     ctx.fillText(score > bestAtStart ? '新纪录!' : '最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 18);
     ctx.fillText('到达第 ' + maxZRun + ' 层 · 最长连击 ×' + runMaxCombo + ' · 吃果 ' + runFruits + ' 个', canvas.width / 2, canvas.height / 2 + 42);
     ctx.fillText('按 R 或点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 66);
+    if (mode === 'daily' && (save.stats.dailyLog || []).length) {
+      const log = save.stats.dailyLog;
+      const mx = Math.max(50, ...log.map(e2 => e2.s));
+      const bw = 24 * PX, gap = 10 * PX;
+      const x0 = canvas.width / 2 - (log.length * bw + (log.length - 1) * gap) / 2;
+      const yb = canvas.height / 2 + 110;
+      const todayStr = String(dailySeed());
+      for (let i = 0; i < log.length; i++) {
+        const h2 = Math.max(3 * PX, Math.round(log[i].s / mx * 30 * PX));
+        ctx.fillStyle = log[i].d === todayStr ? (SK.glow ? '#59c9ff' : '#2a7') : 'rgba(128,128,128,0.45)';
+        ctx.fillRect(x0 + i * (bw + gap), yb - h2, bw, h2);
+      }
+      ctx.font = '11px sans-serif';
+      ctx.fillStyle = SK.text;
+      ctx.globalAlpha = 0.6;
+      ctx.textAlign = 'center';
+      ctx.fillText('最近 ' + log.length + ' 天成绩(高亮为今天)', canvas.width / 2, yb + 14 * PX);
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'left';
+    }
   } else if (cleared) {
     ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1789,6 +1814,7 @@ function draw() {
     ctx.fillText('第 ' + (save.stats.playCount || 0) + ' 局 · 死亡 ' + (save.stats.deaths || 0) + ' 次' + ((save.stats.daily || {}).streak > 1 ? ' · 每日连续打卡 ' + save.stats.daily.streak + ' 天' : ''), canvas.width / 2, 104);
     ctx.fillText(twoPlayer ? 'P1 方向键 · P2 W/A/S/D · 空格或 F 暂停' : '方向键移动 · 右缘升层左缘降层 · 空格或 F 暂停', canvas.width / 2, 120);
     ctx.fillText(twoPlayer ? '谁吃果全场加分 · 队友身体可爬 · R 结算后重开' : '撞身撞墙爬层 · R 键结算后秒重开 · 点"图鉴"看果子', canvas.width / 2, 142);
+    ctx.fillText('E 导出存档码 · I 导入存档(换设备不掉档)', canvas.width / 2, 164);
     ctx.textAlign = 'left';
   }
   ctx.restore();
@@ -1900,6 +1926,41 @@ document.addEventListener('keydown', e => {
       showToast('秘技发现:护盾拉满!');
       playSound('ach');
     }
+  }
+
+  if ((e.code === 'KeyE' || e.code === 'KeyI') && (paused || settled || cleared || !started)) {
+    if (bookOpen || achOpen || replayOpen) return;
+    e.preventDefault();
+    if (e.code === 'KeyE') {
+      let code = '';
+      try { code = btoa(unescape(encodeURIComponent(JSON.stringify(save)))); } catch (err) {}
+      let ok = false;
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = code;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch (err) {}
+      showToast(ok ? '存档码已复制,保存好它!' : '复制失败,稍后再试');
+    } else {
+      const code = window.prompt('粘贴存档码(导出时复制的那段):');
+      if (!code) return;
+      try {
+        const obj = JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
+        if (!obj || obj.v !== 2 || !obj.stats) throw new Error('bad');
+        localStorage.setItem(SAVE_KEY, JSON.stringify(obj));
+        showToast('存档已导入,即将刷新');
+        setTimeout(() => { location.reload(); }, 900);
+      } catch (err) {
+        showToast('存档码无效');
+      }
+    }
+    return;
   }
 
   if (e.code === 'KeyR') {
