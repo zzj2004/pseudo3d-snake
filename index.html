@@ -6,19 +6,34 @@
 <meta name="description" content="伪三维爬层贪吃蛇:撞上自己爬上一层。六种模式、20 种果子、双人合作、隐藏皮肤与手柄支持,单机免费。">
 <meta property="og:title" content="蛇行千层 - 伪三维爬层贪吃蛇">
 <meta property="og:description" content="撞上自己,爬上一层。六种模式 · 20 种果子 · 双人合作 · 手柄支持">
-<title>贪吃蛇</title>
+<title>蛇行千层</title>
 <style>
+  :root {
+    --btn-bg: #fff;
+    --btn-border: #1a1a1a;
+    --btn-color: #111;
+    --btn-radius: 9px;
+    --btn-hover-bg: #f1f1ec;
+    --btn-hover-shadow: 0 3px 10px rgba(0, 0, 0, 0.13);
+    --btn-on-bg: #1a1a1a;
+    --btn-on-color: #fff;
+    --dpad-border: #555;
+  }
   body {
     margin: 0;
-    height: 100vh;
+    min-height: 100vh;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
-    background: #eee;
+    background: linear-gradient(180deg, #f2f3f0 0%, #e6e8e1 100%);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
   }
   canvas {
     background: #fff;
-    border: 2px solid #000;
+    border: 2px solid #111;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
   }
   #shadowCv {
     position: fixed;
@@ -35,7 +50,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    padding: 14px 0;
   }
   .controls {
     display: flex;
@@ -44,15 +60,34 @@
     align-items: center;
     gap: 8px;
     font-size: 14px;
-    color: #000;
+    color: var(--btn-color);
     max-width: 96vw;
   }
   .controls button {
-    padding: 4px 14px;
+    padding: 6px 14px;
     font-size: 14px;
-    border: 1px solid #000;
-    background: #fff;
+    border: 1.5px solid var(--btn-border);
+    border-radius: var(--btn-radius);
+    background: var(--btn-bg);
+    color: var(--btn-color);
     cursor: pointer;
+    transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+  }
+  .controls button:hover {
+    transform: translateY(-1px);
+    background: var(--btn-hover-bg);
+    box-shadow: var(--btn-hover-shadow);
+  }
+  .controls button:active {
+    transform: translateY(0);
+    box-shadow: none;
+  }
+  .controls button.on {
+    background: var(--btn-on-bg);
+    color: var(--btn-on-color);
+  }
+  input[type="range"] {
+    accent-color: var(--btn-border);
   }
   #dpad {
     display: none;
@@ -65,8 +100,11 @@
     font-size: 26px;
     line-height: 1;
     padding: 0;
-    border: 2px solid #555;
-    background: rgba(255,255,255,0.85);
+    border: 2px solid var(--dpad-border);
+    border-radius: var(--btn-radius);
+    background: var(--btn-bg);
+    color: var(--btn-color);
+    box-shadow: var(--btn-hover-shadow);
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
@@ -214,6 +252,7 @@ const soundBtn = document.getElementById('soundBtn');
 soundBtn.addEventListener('click', () => {
   soundOn = !soundOn;
   soundBtn.textContent = soundOn ? '音效:开' : '音效:关';
+  soundBtn.classList.toggle('on', soundOn);
   save.sound = soundOn;
   persist();
   if (soundOn) {
@@ -401,9 +440,9 @@ function showHint(key, text) {
 
 const SAVE_KEY = 'snake3d_save';
 const SKINS = {
-  classic: {name: '经典', wave: 'triangle', bg: '#eee', board: '#fff', border: '#000', text: '#000', overlay: 'rgba(255,255,255,0.92)', snake: '#000', head: '#000', tongue: '#d00', p2: '#8a6a00', wallFill: '#fff', wallFrame: '#000', wallHatch: '#bbb', trapPit: '#222', trapSpike: '#aaa', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
-  bamboo: {name: '翠玉竹林', wave: 'sine', bg: '#dce8d2', board: '#eef7ea', border: '#4e7d46', text: '#2b4a26', overlay: 'rgba(238,247,234,0.92)', snake: '#2e8b4e', head: '#1f6e3c', tongue: '#e0453a', p2: '#b8860b', wallFill: '#f8fcf4', wallFrame: '#4e7d46', wallHatch: '#b9d0ae', trapPit: '#2a3d24', trapSpike: '#8fae7f', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
-  cyber: {name: '赛博2077', wave: 'square', bg: '#04060d', board: '#0a0e1a', border: '#00e5ff', text: '#d8f6ff', overlay: 'rgba(6,10,20,0.88)', snake: '#00e5ff', head: '#7df9ff', tongue: '#ff2d95', p2: '#ff2d95', wallFill: '#0e1c2e', wallFrame: '#1d5b74', wallHatch: '#16455a', trapPit: '#14263e', trapSpike: '#6fa8c9', fastCol: '#4dff9d', slowCol: '#5db8ff', dblCol: '#ffc04d', ghostCol: '#9aa8b8', comboCol: '#ffb300', glow: true}
+  classic: {name: '经典', wave: 'triangle', ui: {btnBg: '#fff', btnBorder: '#1a1a1a', btnColor: '#111', btnRadius: 9, btnHoverBg: '#f1f1ec', btnOnBg: '#1a1a1a', btnOnColor: '#fff', cardStroke: 'rgba(0,0,0,0.1)', cardRadius: 16, toastBg: 'rgba(22,24,27,0.82)'}, bg: '#eee', board: '#fff', border: '#111', text: '#000', overlay: 'rgba(255,255,255,0.92)', snake: '#000', head: '#000', tongue: '#d00', p2: '#8a6a00', wallFill: '#fff', wallFrame: '#000', wallHatch: '#bbb', trapPit: '#222', trapSpike: '#aaa', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
+  bamboo: {name: '翠玉竹林', wave: 'sine', ui: {btnBg: '#f4f9ef', btnBorder: '#4e7d46', btnColor: '#2b4a26', btnRadius: 17, btnHoverBg: '#e6f1dc', btnOnBg: '#4e7d46', btnOnColor: '#fff', cardStroke: 'rgba(78,125,70,0.45)', cardRadius: 22, toastBg: 'rgba(38,66,32,0.88)'}, bg: '#dce8d2', board: '#eef7ea', border: '#4e7d46', text: '#2b4a26', overlay: 'rgba(238,247,234,0.92)', snake: '#2e8b4e', head: '#1f6e3c', tongue: '#e0453a', p2: '#b8860b', wallFill: '#f8fcf4', wallFrame: '#4e7d46', wallHatch: '#b9d0ae', trapPit: '#2a3d24', trapSpike: '#8fae7f', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
+  cyber: {name: '赛博2077', wave: 'square', ui: {btnBg: '#0c1420', btnBorder: '#00e5ff', btnColor: '#d8f6ff', btnRadius: 4, btnHoverBg: '#14273d', btnOnBg: '#00e5ff', btnOnColor: '#04121a', cardStroke: 'rgba(0,229,255,0.4)', cardRadius: 6, toastBg: 'rgba(6,18,30,0.88)'}, bg: '#04060d', board: '#0a0e1a', border: '#00e5ff', text: '#d8f6ff', overlay: 'rgba(6,10,20,0.88)', snake: '#00e5ff', head: '#7df9ff', tongue: '#ff2d95', p2: '#ff2d95', wallFill: '#0e1c2e', wallFrame: '#1d5b74', wallHatch: '#16455a', trapPit: '#14263e', trapSpike: '#6fa8c9', fastCol: '#4dff9d', slowCol: '#5db8ff', dblCol: '#ffc04d', ghostCol: '#9aa8b8', comboCol: '#ffb300', glow: true}
 };
 const FRUIT_DESC = {
   normal: '普通 +1 分', fast: '加速 6 秒', slow: '减速 6 秒', grow: '蛇身 +3',
@@ -537,12 +576,24 @@ const save = loadSave();
 
 let soundOn = save.sound;
 soundBtn.textContent = soundOn ? '音效:开' : '音效:关';
+soundBtn.classList.toggle('on', soundOn);
 const skinBtn = document.getElementById('skinBtn');
 const controlsDiv = document.querySelector('.controls');
 function applySkin() {
   const k = (typeof save.skin === 'string' && SKINS[save.skin]) ? save.skin : 'classic';
   save.skin = k;
   const s = SKINS[k];
+  const ui = s.ui || {};
+  const set = (name, v) => document.documentElement.style.setProperty(name, v);
+  set('--btn-bg', ui.btnBg || '#fff');
+  set('--btn-border', ui.btnBorder || '#1a1a1a');
+  set('--btn-color', ui.btnColor || '#111');
+  set('--btn-radius', (ui.btnRadius || 9) + 'px');
+  set('--btn-hover-bg', ui.btnHoverBg || '#f1f1ec');
+  set('--btn-hover-shadow', s.glow ? '0 0 10px rgba(0,229,255,0.35)' : '0 3px 10px rgba(0,0,0,0.13)');
+  set('--btn-on-bg', ui.btnOnBg || '#1a1a1a');
+  set('--btn-on-color', ui.btnOnColor || '#fff');
+  set('--dpad-border', ui.btnBorder || '#555');
   document.body.style.background = s.bg;
   canvas.style.borderColor = s.border;
   controlsDiv.style.color = s.text;
@@ -633,11 +684,13 @@ function bgmStop() {
 bgmBtn.addEventListener('click', () => {
   bgmOn = !bgmOn;
   bgmBtn.textContent = bgmOn ? '音乐:开' : '音乐:关';
+  bgmBtn.classList.toggle('on', bgmOn);
   save.bgm = bgmOn;
   persist();
   if (bgmOn) bgmStart(); else bgmStop();
 });
 if (bgmOn) bgmBtn.textContent = '音乐:开';
+bgmBtn.classList.toggle('on', bgmOn);
 const dualBtn = document.getElementById('dualBtn');
 dualBtn.addEventListener('click', () => {
   if (started && !cleared && !settled) {
@@ -646,6 +699,7 @@ dualBtn.addEventListener('click', () => {
   }
   twoPlayer = !twoPlayer;
   dualBtn.textContent = twoPlayer ? '双人:开' : '双人:关';
+  dualBtn.classList.toggle('on', twoPlayer);
   reset();
   if (twoPlayer) showToast('双人合作:P2 使用 W/A/S/D');
 });
@@ -1454,6 +1508,26 @@ function fruitSprite(type) {
   }
   return fruitSpriteCache.map[type];
 }
+function rrPath(x, y, w, h, r) {
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+  else ctx.rect(x, y, w, h);
+}
+function overlayCard(hRatio, wRatio) {
+  const U = canvas.width / 400;
+  const cw = Math.min(canvas.width * 0.9, (wRatio || 340) * U);
+  const ch = hRatio * U;
+  const x = (canvas.width - cw) / 2;
+  const y = (canvas.height - ch) / 2;
+  ctx.fillStyle = SK.overlay;
+  rrPath(x, y, cw, ch, (SK.ui.cardRadius || 16) * U);
+  ctx.fill();
+  ctx.strokeStyle = SK.ui.cardStroke || 'rgba(0,0,0,0.1)';
+  ctx.lineWidth = SK.glow ? 1.5 : 1;
+  rrPath(x, y, cw, ch, (SK.ui.cardRadius || 16) * U);
+  ctx.stroke();
+}
+
 function fillFruitShape(type, px, py, size) {
   if (type === 'rainbow') {
     const g = ctx.createLinearGradient(px, py, px + size, py + size);
@@ -1578,9 +1652,14 @@ function drawBook() {
   ctx.textAlign = 'center';
   ctx.fillText('果子图鉴 · 已点亮 ' + got + '/' + total, canvas.width / 2, 34 * U);
   ctx.fillStyle = 'rgba(128,128,128,0.35)';
-  ctx.fillRect(70 * U, 46 * U, 260 * U, 8 * U);
-  ctx.fillStyle = got === total ? '#fd0' : '#4a4';
-  ctx.fillRect(70 * U, 46 * U, Math.round(260 * U * got / total), 8 * U);
+  rrPath(70 * U, 46 * U, 260 * U, 8 * U, 4 * U);
+  ctx.fill();
+  ctx.fillStyle = got === total ? '#f0c419' : '#4a4';
+  rrPath(70 * U, 46 * U, Math.round(260 * U * got / total), 8 * U, 4 * U);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(128,128,128,0.25)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(30 * U, 82 * U); ctx.lineTo(canvas.width - 30 * U, 82 * U); ctx.stroke();
   ctx.font = Math.round(11 * U) + 'px sans-serif';
   ctx.fillStyle = SK.text;
   ctx.globalAlpha = 0.6;
@@ -2123,10 +2202,23 @@ function draw() {
     if (age < 1000) {
       const k = Math.min(1, age / 150, (1000 - age) / 250);
       ctx.globalAlpha = k;
-      ctx.fillStyle = SK.text;
       ctx.font = 'bold 15px sans-serif';
+      const tw = ctx.measureText(toastMsg.text).width;
+      const pw = tw + 30;
+      const px2 = canvas.width / 2 - pw / 2;
+      const py2 = 26;
+      ctx.fillStyle = SK.ui.toastBg || 'rgba(22,24,27,0.82)';
+      rrPath(px2, py2, pw, 32, Math.min(16, (SK.ui.btnRadius || 9) + 6));
+      ctx.fill();
+      if (SK.glow) {
+        ctx.strokeStyle = 'rgba(0,229,255,0.4)';
+        ctx.lineWidth = 1;
+        rrPath(px2, py2, pw, 32, Math.min(16, (SK.ui.btnRadius || 9) + 6));
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#fff';
       ctx.textAlign = 'center';
-      ctx.fillText(toastMsg.text, canvas.width / 2, 44);
+      ctx.fillText(toastMsg.text, canvas.width / 2, py2 + 21);
       ctx.globalAlpha = 1;
       ctx.textAlign = 'left';
     } else if (toastQueue.length) {
@@ -2145,6 +2237,7 @@ function draw() {
     ctx.globalAlpha = oa;
     ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    overlayCard(240, 350);
     ctx.fillStyle = SK.text;
     ctx.font = 'bold 28px sans-serif';
     ctx.textAlign = 'center';
@@ -2178,6 +2271,7 @@ function draw() {
   } else if (cleared) {
     ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    overlayCard(190, 350);
     ctx.fillStyle = SK.text;
     ctx.font = 'bold 28px sans-serif';
     ctx.textAlign = 'center';
@@ -2189,6 +2283,7 @@ function draw() {
   } else if (!started) {
     ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    overlayCard(216, 330);
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = SK.snake;
     for (const s of demoSnake) {
@@ -2204,18 +2299,23 @@ function draw() {
     ctx.fillStyle = SK.text;
     ctx.font = 'bold 24px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('贪吃蛇', canvas.width / 2, canvas.height / 2 - 34);
+    ctx.fillText('蛇行千层', canvas.width / 2, canvas.height / 2 - 40);
+    ctx.font = '13px sans-serif';
+    ctx.globalAlpha = 0.65;
+    ctx.fillText('伪三维爬层 · 撞上自己,爬上一层', canvas.width / 2, canvas.height / 2 - 18);
+    ctx.globalAlpha = 1;
     ctx.font = '16px sans-serif';
-    ctx.fillText(MODE_DESC[mode], canvas.width / 2, canvas.height / 2 - 4);
-    ctx.fillText('最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 20);
-    ctx.fillText('点击开始按钮开始游戏', canvas.width / 2, canvas.height / 2 + 44);
+    ctx.fillText(MODE_DESC[mode], canvas.width / 2, canvas.height / 2 + 20);
+    ctx.fillText('最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 44);
+    ctx.fillText('点击开始按钮开始游戏', canvas.width / 2, canvas.height / 2 + 68);
     ctx.font = '12px sans-serif';
     ctx.globalAlpha = 0.6;
-    ctx.fillText(twoPlayer ? 'P1 方向键 · P2 W/A/S/D · 空格或 F 暂停' : '方向键移动 · 空格或 F 暂停', canvas.width / 2, canvas.height / 2 + 66);
+    ctx.fillText(twoPlayer ? 'P1 方向键 · P2 W/A/S/D · 空格或 F 暂停' : '方向键移动 · 空格或 F 暂停', canvas.width / 2, canvas.height / 2 + 90);
     ctx.globalAlpha = 1;
   } else if (paused) {
     ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    overlayCard(210, 350);
     ctx.fillStyle = SK.text;
     ctx.font = 'bold 22px sans-serif';
     ctx.textAlign = 'center';
