@@ -412,6 +412,7 @@ let particles = [];
 let shakeUntil = 0;
 let runMaxCombo = 0;
 let runFruits = 0;
+let bulges = [];
 let bestGhost = null;
 try {
   bestGhost = JSON.parse(localStorage.getItem('snake3d_ghost_endless') || 'null');
@@ -1005,6 +1006,8 @@ function eat(f, z, eff, who) {
   layers[z].fruits = layers[z].fruits.filter(x => x !== f);
   layers[z].fruits.push(randomFruit(z));
   burst(f.x * GRID + GRID / 2, f.y * GRID + GRID / 2, FRUIT_STYLES[f.type] || '#fff', f.type === 'gold' ? 16 : 9);
+  bulges.push(Date.now());
+  if (bulges.length > 5) bulges.shift();
 
   const gate = layers[z].gate;
   if (gate && !gate.open && f.type !== 'bomb') {
@@ -1199,7 +1202,13 @@ function settle(reason) {
   settleReason = reason;
   overlayAt = Date.now();
   save.stats.playCount = (save.stats.playCount || 0) + 1;
-  if (reason === 'dead') save.stats.deaths = (save.stats.deaths || 0) + 1;
+  if (reason === 'dead') {
+    save.stats.deaths = (save.stats.deaths || 0) + 1;
+    for (const s of snake) {
+      if (s.z === snake[0].z) burst(s.x * GRID + GRID / 2, s.y * GRID + GRID / 2, SK.snake, 3);
+    }
+    if (!REDUCED_MOTION) shakeUntil = Date.now() + 320;
+  }
   if (mode === 'daily') {
     const today = String(dailySeed());
     const d = save.stats.daily = save.stats.daily || {last: '', streak: 0};
@@ -1962,12 +1971,22 @@ function draw() {
     const s = onLayer[i];
     const tailN = onLayer.length - 1 - i;
     const inset = tailN === 0 ? 6.5 * PX : (tailN === 1 ? 5 * PX : INSET);
-    const rad = tailN === 0 ? 4 * PX : (tailN === 1 ? 4.5 * PX : RADIUS);
+    let rad = tailN === 0 ? 4 * PX : (tailN === 1 ? 4.5 * PX : RADIUS);
+    let br = rad;
+    let pad = inset;
+    for (const t0 of bulges) {
+      const pos = (Date.now() - t0) / Math.max(50, curSpeed);
+      const d = Math.abs(i - pos);
+      if (d < 1.3) {
+        const cand = rad * (1 + 0.42 * (1 - d / 1.3));
+        if (cand > br) { br = cand; pad = inset * rad / cand; }
+      }
+    }
     ctx.beginPath();
     if (ctx.roundRect) {
-      ctx.roundRect(s.x * GRID + inset, s.y * GRID + inset, GRID - inset * 2, GRID - inset * 2, rad);
+      ctx.roundRect(s.x * GRID + pad, s.y * GRID + pad, GRID - pad * 2, GRID - pad * 2, br);
     } else {
-      ctx.rect(s.x * GRID + inset, s.y * GRID + inset, GRID - inset * 2, GRID - inset * 2);
+      ctx.rect(s.x * GRID + pad, s.y * GRID + pad, GRID - pad * 2, GRID - pad * 2);
     }
     ctx.fill();
   }
@@ -2081,6 +2100,29 @@ function draw() {
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'left';
   ctx.fillText('得分: ' + score + '  第' + z + '层', 10, 20);
+
+  if (started && !settled && (maxZRun >= 4 || z >= 3)) {
+    const xh = 9 * PX;
+    const y0 = 48 * PX, y1 = canvas.height - 40 * PX;
+    const zMax = Math.max(10, maxZRun);
+    const yPos = zz => y1 - (zz - 1) / (zMax - 1) * (y1 - y0);
+    ctx.strokeStyle = 'rgba(128,128,128,0.35)';
+    ctx.lineWidth = Math.max(1, 1.5 * PX);
+    ctx.beginPath(); ctx.moveTo(xh, y0); ctx.lineTo(xh, y1); ctx.stroke();
+    ctx.font = Math.max(7, Math.round(8 * PX)) + 'px sans-serif';
+    ctx.fillStyle = 'rgba(128,128,128,0.6)';
+    for (let zz = 10; zz <= zMax; zz += 10) {
+      const yy = yPos(zz);
+      ctx.beginPath(); ctx.moveTo(xh - 4 * PX, yy); ctx.lineTo(xh + 4 * PX, yy); ctx.stroke();
+      ctx.fillText(zz, xh + 6 * PX, yy + 3 * PX);
+    }
+    const ym = yPos(maxZRun);
+    ctx.beginPath();
+    ctx.moveTo(xh - 5 * PX, ym); ctx.lineTo(xh - 11 * PX, ym - 4 * PX); ctx.lineTo(xh - 11 * PX, ym + 4 * PX);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = SK.text;
+    ctx.beginPath(); ctx.arc(xh, yPos(z), 4.5 * PX, 0, Math.PI * 2); ctx.fill();
+  }
 
   if (combo > 0 && started && !cleared && !settled) {
     const cm = 1 + Math.min(4, Math.floor(combo / 8));
@@ -2375,6 +2417,7 @@ function reset() {
   prevSnake2 = [];
   lastStepAt = Date.now();
   overlayAt = 0;
+  bulges = [];
   layers = {};
   if (twoPlayer) {
     snake2 = [
