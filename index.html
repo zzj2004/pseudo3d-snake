@@ -108,13 +108,25 @@ const ctx = canvas.getContext('2d');
 const COLS = 20;
 const ROWS = 20;
 const narrow = window.innerWidth < 700;
-const SIZE = narrow
+let SIZE = narrow
   ? Math.max(200, Math.floor((window.innerWidth - 12) / COLS) * COLS)
   : Math.max(400, Math.min(640, Math.floor(Math.min(window.innerWidth * 0.55, window.innerHeight * 0.68) / COLS) * COLS));
 canvas.width = SIZE;
 canvas.height = SIZE;
-const GRID = SIZE / COLS;
-const PX = SIZE / 400;
+let GRID = SIZE / COLS;
+let PX = SIZE / 400;
+window.addEventListener('resize', () => {
+  const nw = window.innerWidth < 700;
+  const ns = nw
+    ? Math.max(200, Math.floor((window.innerWidth - 12) / COLS) * COLS)
+    : Math.max(400, Math.min(640, Math.floor(Math.min(window.innerWidth * 0.55, window.innerHeight * 0.68) / COLS) * COLS));
+  if (ns === SIZE) return;
+  SIZE = ns;
+  canvas.width = SIZE;
+  canvas.height = SIZE;
+  GRID = SIZE / COLS;
+  PX = SIZE / 400;
+});
 const shadowCv = document.getElementById('shadowCv');
 const sctx = shadowCv.getContext('2d');
 function resizeShadow() {
@@ -697,6 +709,7 @@ function step() {
     combo = 0;
     showToast('连击中断');
   }
+  flushKeyBuffer();
   dir = nextDir;
 
   const old = snake.map(s => ({x: s.x, y: s.y, z: s.z}));
@@ -1709,6 +1722,10 @@ function draw() {
     ctx.fillText(MODE_DESC[mode], canvas.width / 2, canvas.height / 2 - 4);
     ctx.fillText('最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 20);
     ctx.fillText('点击开始按钮开始游戏', canvas.width / 2, canvas.height / 2 + 44);
+    ctx.font = '12px sans-serif';
+    ctx.globalAlpha = 0.6;
+    ctx.fillText(twoPlayer ? 'P1 方向键 · P2 W/A/S/D · 空格或 F 暂停' : '方向键移动 · 空格或 F 暂停', canvas.width / 2, canvas.height / 2 + 66);
+    ctx.globalAlpha = 1;
   } else if (paused) {
     ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1787,11 +1804,21 @@ function applyDir(d) {
   if (controlsReversed()) d = {x: -d.x, y: -d.y};
   if (d.x !== -dir.x || d.y !== -dir.y) nextDir = d;
 }
+let keyBuffer = [];
+function flushKeyBuffer() {
+  if (!keyBuffer.length) return;
+  const nd = keyBuffer[keyBuffer.length - 1];
+  if (nd.x !== -dir.x || nd.y !== -dir.y) nextDir = nd;
+  keyBuffer = [];
+}
 function applyDir2(d) {
   if (controlsReversed()) d = {x: -d.x, y: -d.y};
   if (d.x !== -dir2.x || d.y !== -dir2.y) nextDir2 = d;
 }
 
+document.addEventListener('click', e => {
+  if (e.target && e.target.tagName === 'BUTTON') e.target.blur();
+});
 document.addEventListener('keydown', e => {
   if (e.isComposing) return;
 
@@ -1823,6 +1850,15 @@ document.addEventListener('keydown', e => {
     }
   }
 
+  if (e.code === 'KeyF') {
+    if (bookOpen || achOpen || replayOpen) return;
+    if (started && !cleared && !settled) {
+      e.preventDefault();
+      togglePause();
+    }
+    return;
+  }
+
   if (e.code === 'Space') {
     e.preventDefault();
     if (bookOpen) {
@@ -1849,6 +1885,7 @@ document.addEventListener('keydown', e => {
     ArrowLeft:  {x: -1, y: 0},
     ArrowRight: {x: 1, y: 0}
   };
+  const buffered = [];
   let d = keyMap[e.code];
   if (!d) return;
   e.preventDefault();
@@ -1856,7 +1893,15 @@ document.addEventListener('keydown', e => {
     const km2 = {KeyW: {x: 0, y: -1}, KeyS: {x: 0, y: 1}, KeyA: {x: -1, y: 0}, KeyD: {x: 1, y: 0}};
     if (km2[e.code]) { applyDir2(km2[e.code]); return; }
   }
+  if (d.x === -dir.x && d.y === -dir.y) {
+    const nd = controlsReversed() ? {x: d.x, y: d.y} : d;
+    buffered.length = 0;
+    buffered.push(nd);
+    keyBuffer = buffered;
+    return;
+  }
   applyDir(d);
+  keyBuffer = buffered;
 });
 
 function tick() {
