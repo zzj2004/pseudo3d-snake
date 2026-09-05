@@ -1,4 +1,7 @@
-# 贪吃蛇(伪三维多层版)
+# 蛇行千层(伪三维多层贪吃蛇)
+
+> **🎮 在线直接玩:<https://zzj2004.github.io/pseudo3d-snake/>**(无需下载,GitHub Pages 实时同步 master 分支)
+> 📦 也可下载仓库后双击 `index.html` 离线游玩(单文件,零依赖)
 
 单文件网页小游戏,纯 HTML/CSS/JS,无任何外部依赖,双击 `index.html` 即可在浏览器中运行。
 
