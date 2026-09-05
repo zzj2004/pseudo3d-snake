@@ -338,9 +338,18 @@ try {
 if (!bestGhost || !Array.isArray(bestGhost.path) || !bestGhost.path.length) bestGhost = null;
 let toastMsg = null;
 const hintsShown = {};
+let toastQueue = [];
 let keyBuf = '';
+const REDUCED_MOTION = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function showToast(text) {
+  if (toastMsg && Date.now() - toastMsg.at < 1000 && toastMsg.text !== text) {
+    if (toastQueue[toastQueue.length - 1] !== text) {
+      if (toastQueue.length >= 3) toastQueue.shift();
+      toastQueue.push(text);
+    }
+    return;
+  }
   toastMsg = {text: text, at: Date.now()};
 }
 function showHint(key, text) {
@@ -542,7 +551,15 @@ function bgmStart() {
   if (!AC) return;
   if (!audioCtx) audioCtx = new AC();
   if (audioCtx.state === 'suspended') audioCtx.resume();
-  if (!bgmTimer) bgmTimer = setInterval(bgmNote, 280);
+  if (!bgmTimer) bgmTimer = setInterval(bgmNote, (mode === 'fog' || mode === 'zen') ? 340 : 280);
+}
+function bgmNote() {
+  if (!bgmOn || !audioCtx) return;
+  let f = BGM_SEQ[bgmStep % BGM_SEQ.length];
+  if (mode === 'fog' || mode === 'zen') f /= 2;
+  tone(f, 0, 0.22, 'triangle', 0.03);
+  if (bgmStep % 4 === 0) tone(f / 2, 0, 0.3, 'sine', 0.025);
+  bgmStep++;
 }
 function bgmStop() {
   if (bgmTimer) {
@@ -1023,7 +1040,7 @@ function loseLife(msg) {
   comboUntil = 0;
   lives--;
   burst(snake[0].x * GRID + GRID / 2, snake[0].y * GRID + GRID / 2, '#d33', 16);
-  shakeUntil = Date.now() + 200;
+  if (!REDUCED_MOTION) shakeUntil = Date.now() + 200;
   if (lives <= 0) {
     settle('dead');
   } else {
@@ -1033,6 +1050,7 @@ function loseLife(msg) {
 }
 
 function burst(cx, cy, color, n) {
+  if (REDUCED_MOTION) return;
   for (let i = 0; i < n; i++) {
     const a = Math.random() * Math.PI * 2;
     const sp = (1 + Math.random() * 2.5) * PX;
@@ -1697,6 +1715,8 @@ function draw() {
       ctx.fillText(toastMsg.text, canvas.width / 2, 44);
       ctx.globalAlpha = 1;
       ctx.textAlign = 'left';
+    } else if (toastQueue.length) {
+      toastMsg = {text: toastQueue.shift(), at: Date.now()};
     }
   }
 
