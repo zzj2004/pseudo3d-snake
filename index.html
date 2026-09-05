@@ -363,6 +363,7 @@ modeBtn.addEventListener('click', () => {
   applyModeBtn();
   reset();
   started = false;
+  if (bgmOn && bgmTimer) { bgmStop(); bgmStart(); }
 });
 
 let started = false;
@@ -413,6 +414,7 @@ let shakeUntil = 0;
 let runMaxCombo = 0;
 let runFruits = 0;
 let bulges = [];
+let runAch = [];
 let bestGhost = null;
 try {
   bestGhost = JSON.parse(localStorage.getItem('snake3d_ghost_endless') || 'null');
@@ -791,6 +793,19 @@ function ensureLayer(z, avoid) {
   if (!layers[z]) {
     layers[z] = {fruits: [], walls: [], traps: [], gate: (z > 0 && z % 10 === 0) ? {needed: 3, eaten: 0, open: false} : null};
     for (let i = 0; i < 3; i++) layers[z].fruits.push(randomFruit(z, avoid, true));
+    if (z === 1) {
+      const onPath = layers[1].fruits.some(f => f.y >= 8 && f.y <= 12 && f.x >= 12);
+      if (!onPath) {
+        let p = {x: 12 + Math.floor(rand() * 6), y: 9 + Math.floor(rand() * 3), type: 'normal'};
+        let tries = 0;
+        while (tries++ < 20 && (layers[1].fruits.some(o => o.x === p.x && o.y === p.y) ||
+               layers[1].walls.some(o => o.x === p.x && o.y === p.y) ||
+               snake.some(o => o.z === 1 && o.x === p.x && o.y === p.y))) {
+          p = {x: 12 + Math.floor(rand() * 6), y: 9 + Math.floor(rand() * 3), type: 'normal'};
+        }
+        layers[1].fruits.push(p);
+      }
+    }
     if (z >= 2) {
       const count = 4 + Math.floor(rand() * 4) + Math.min(4, Math.floor((z - 1) / 2));
       for (let i = 0; i < count; i++) layers[z].walls.push(randomWall(z, avoid));
@@ -1798,6 +1813,7 @@ function checkAch() {
   for (const a of ACH) {
     if (cond[a.id] && !save.ach[a.id]) {
       save.ach[a.id] = true;
+      runAch.push(a.name);
       persist();
       showToast('🏆 成就解锁:' + a.name);
       playSound('ach');
@@ -2051,13 +2067,14 @@ function draw() {
   }
 
   if (mode === 'fog' && started && !cleared && !settled) {
+    const fogK = Math.max(0.8, Math.min(1.25, 1 + (150 - curSpeed) / 150 * 0.25));
     const centers = [{x: cx, y: cy}];
     if (twoPlayer && snake2.length) {
       const h2 = snake2.find(s => s.z === z);
       if (h2) centers.push({x: h2.x * GRID + GRID / 2, y: h2.y * GRID + GRID / 2});
     }
     for (const c of centers) {
-      const fogGrad = ctx.createRadialGradient(c.x, c.y, 70 * PX, c.x, c.y, 135 * PX);
+      const fogGrad = ctx.createRadialGradient(c.x, c.y, 70 * PX * fogK, c.x, c.y, 135 * PX * fogK);
       fogGrad.addColorStop(0, 'rgba(8,10,18,0)');
       fogGrad.addColorStop(1, 'rgba(8,10,18,0.96)');
       ctx.fillStyle = fogGrad;
@@ -2281,7 +2298,10 @@ function draw() {
     ctx.globalAlpha = oa;
     ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    overlayCard(240, 350);
+    const streak = (mode === 'daily' && (save.stats.daily || {}).streak >= 3) ? save.stats.daily.streak : 0;
+    const hasLog = mode === 'daily' && (save.stats.dailyLog || []).length > 0;
+    const cardH = 240 + (runAch.length ? 26 : 0) + (streak ? 26 : 0) + (hasLog ? 48 : 0);
+    overlayCard(cardH, 350);
     ctx.fillStyle = SK.text;
     ctx.font = 'bold 28px sans-serif';
     ctx.textAlign = 'center';
@@ -2290,14 +2310,26 @@ function draw() {
     ctx.fillText(MODE_NAMES[mode] + '模式  得分: ' + score, canvas.width / 2, canvas.height / 2 - 8);
     ctx.fillText(score > bestAtStart ? '新纪录!' : '最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 18);
     ctx.fillText('到达第 ' + maxZRun + ' 层 · 最长连击 ×' + runMaxCombo + ' · 吃果 ' + runFruits + ' 个', canvas.width / 2, canvas.height / 2 + 42);
-    ctx.fillText('按 R 或点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 66);
+    let yy = canvas.height / 2 + 68;
+    if (runAch.length) {
+      ctx.fillStyle = SK.glow ? '#59c9ff' : '#2a7';
+      ctx.fillText('🏆 本局成就:' + runAch.join(' · '), canvas.width / 2, yy);
+      yy += 24;
+    }
+    if (streak) {
+      ctx.fillStyle = '#f0c419';
+      ctx.fillText('🔥 连续打卡 ' + streak + ' 天!', canvas.width / 2, yy);
+      yy += 24;
+    }
+    ctx.fillStyle = SK.text;
+    ctx.fillText('按 R 或点击开始按钮再来一局', canvas.width / 2, yy);
     ctx.globalAlpha = 1;
-    if (mode === 'daily' && (save.stats.dailyLog || []).length) {
+    if (hasLog) {
       const log = save.stats.dailyLog;
       const mx = Math.max(50, ...log.map(e2 => e2.s));
       const bw = 24 * PX, gap = 10 * PX;
       const x0 = canvas.width / 2 - (log.length * bw + (log.length - 1) * gap) / 2;
-      const yb = canvas.height / 2 + 110;
+      const yb = yy + 44;
       const todayStr = String(dailySeed());
       for (let i = 0; i < log.length; i++) {
         const h2 = Math.max(3 * PX, Math.round(log[i].s / mx * 30 * PX));
@@ -2418,6 +2450,7 @@ function reset() {
   lastStepAt = Date.now();
   overlayAt = 0;
   bulges = [];
+  runAch = [];
   layers = {};
   if (twoPlayer) {
     snake2 = [
