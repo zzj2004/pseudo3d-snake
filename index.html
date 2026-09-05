@@ -791,8 +791,10 @@ const RAINBOW_POOL = ['normal','fast','slow','grow','shrink','reverse','up','dow
 let layers = {};
 function ensureLayer(z, avoid) {
   if (!layers[z]) {
+    const depth = z - 1;
     layers[z] = {fruits: [], walls: [], traps: [], gate: (z > 0 && z % 10 === 0) ? {needed: 3, eaten: 0, open: false} : null};
-    for (let i = 0; i < 3; i++) layers[z].fruits.push(randomFruit(z, avoid, true));
+    const fcount = 3 + Math.min(5, Math.floor(depth / 10));
+    for (let i = 0; i < fcount; i++) layers[z].fruits.push(randomFruit(z, avoid, true));
     if (z === 1) {
       const onPath = layers[1].fruits.some(f => f.y >= 8 && f.y <= 12 && f.x >= 12);
       if (!onPath) {
@@ -807,17 +809,19 @@ function ensureLayer(z, avoid) {
       }
     }
     if (z >= 2) {
-      const count = 4 + Math.floor(rand() * 4) + Math.min(4, Math.floor((z - 1) / 2));
+      const count = 4 + Math.floor(rand() * 4) + Math.min(12, Math.floor(depth / 4));
       for (let i = 0; i < count; i++) layers[z].walls.push(randomWall(z, avoid));
       if (mode !== 'zen') {
-        const tcount = 1 + Math.min(2, Math.floor((z - 1) / 3));
+        const tcount = 1 + Math.min(5, Math.floor(depth / 8));
         for (let i = 0; i < tcount; i++) layers[z].traps.push(randomWall(z, avoid));
       }
     }
   }
 }
 function fruitPool(z) {
-  const pool = z >= 2 ? BASE_POOL.concat(['up', 'down']) : BASE_POOL.slice();
+  const depth = z - 1;
+  const pool = z >= 2 ? BASE_POOL.concat(['down']) : BASE_POOL.slice();
+  if (z >= 2 && z <= 9) pool.push('up');
   if (z >= 2 && mode !== 'zen') {
     pool.push('bomb', 'bomb');
     if (z >= 5) pool.push('bomb');
@@ -825,7 +829,7 @@ function fruitPool(z) {
     if (mode === 'survival' && z >= 5) pool.push('bomb');
   }
   if (isHoliday()) pool.push('gold', 'gold');
-  const bonus = Math.min(3, Math.floor((z - 1) / 3));
+  const bonus = Math.min(3, Math.floor(depth / 3));
   for (let i = 0; i < bonus; i++) pool.push('gold', 'rainbow');
   return pool;
 }
@@ -2648,10 +2652,11 @@ function tick() {
     console.error('tick error:', e);
     showToast('游戏异常已自愈');
   }
-  let speed = Number(speedInput.value) - Math.min(80, score * 2) - Math.min(32, (snake[0].z - 1) * 4);
+  let speed = Number(speedInput.value) - Math.min(80, score * 2) - Math.min(64, (snake[0].z - 1) * 4);
   if (Date.now() < fastUntil) speed -= 60;
   if (Date.now() < slowUntil) speed += 60;
-  speed = Math.max(75, Math.min(600, speed));
+  const floorMs = Math.max(50, 75 - Math.min(25, snake[0].z - 1));
+  speed = Math.max(floorMs, Math.min(600, speed));
   curSpeed = speed;
   setTimeout(tick, speed);
 }
