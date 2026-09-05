@@ -96,6 +96,7 @@
     <button id="shareBtn">分享</button>
     <button id="replayBtn">回放</button>
     <button id="dualBtn">双人:关</button>
+    <button id="fsBtn">全屏</button>
     <button id="skinBtn">皮肤:经典</button>
     <label for="speed">速度:</label>
     <input type="range" id="speed" min="80" max="300" step="10" value="150">
@@ -107,19 +108,20 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const COLS = 20;
 const ROWS = 20;
-const narrow = window.innerWidth < 700;
-let SIZE = narrow
-  ? Math.max(200, Math.floor((window.innerWidth - 12) / COLS) * COLS)
-  : Math.max(400, Math.min(640, Math.floor(Math.min(window.innerWidth * 0.55, window.innerHeight * 0.68) / COLS) * COLS));
+function calcSize() {
+  const nw = window.innerWidth < 700;
+  const cap = document.fullscreenElement ? 800 : 640;
+  return nw
+    ? Math.max(200, Math.floor((window.innerWidth - 12) / COLS) * COLS)
+    : Math.max(400, Math.min(cap, Math.floor(Math.min(window.innerWidth * 0.55, window.innerHeight * 0.68) / COLS) * COLS));
+}
+let SIZE = calcSize();
 canvas.width = SIZE;
 canvas.height = SIZE;
 let GRID = SIZE / COLS;
 let PX = SIZE / 400;
 window.addEventListener('resize', () => {
-  const nw = window.innerWidth < 700;
-  const ns = nw
-    ? Math.max(200, Math.floor((window.innerWidth - 12) / COLS) * COLS)
-    : Math.max(400, Math.min(640, Math.floor(Math.min(window.innerWidth * 0.55, window.innerHeight * 0.68) / COLS) * COLS));
+  const ns = calcSize();
   if (ns === SIZE) return;
   SIZE = ns;
   canvas.width = SIZE;
@@ -506,6 +508,17 @@ shareBtn.addEventListener('click', () => {
     return;
   }
   showToast(ok ? '战绩已复制,去发给朋友!' : '复制失败,手动截图也行!');
+});
+const fsBtn = document.getElementById('fsBtn');
+fsBtn.addEventListener('click', () => {
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else if (document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => showToast('浏览器不允许全屏'));
+  }
+});
+document.addEventListener('fullscreenchange', () => {
+  fsBtn.textContent = document.fullscreenElement ? '退出全屏' : '全屏';
 });
 const bgmBtn = document.getElementById('bgmBtn');
 let bgmOn = !!save.bgm;
@@ -1687,7 +1700,7 @@ function draw() {
     ctx.fillText(MODE_NAMES[mode] + '模式  得分: ' + score, canvas.width / 2, canvas.height / 2 - 8);
     ctx.fillText(score > bestAtStart ? '新纪录!' : '最高分: ' + save.best[mode], canvas.width / 2, canvas.height / 2 + 18);
     ctx.fillText('到达第 ' + maxZRun + ' 层 · 最长连击 ×' + runMaxCombo + ' · 吃果 ' + runFruits + ' 个', canvas.width / 2, canvas.height / 2 + 42);
-    ctx.fillText('点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 66);
+    ctx.fillText('按 R 或点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 66);
   } else if (cleared) {
     ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1698,7 +1711,7 @@ function draw() {
     ctx.font = '16px sans-serif';
     ctx.fillText('得分: ' + score, canvas.width / 2, canvas.height / 2 + 10);
     ctx.fillText('最高分: ' + save.best.endless, canvas.width / 2, canvas.height / 2 + 32);
-    ctx.fillText('点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 54);
+    ctx.fillText('按 R 或点击开始按钮再来一局', canvas.width / 2, canvas.height / 2 + 54);
   } else if (!started) {
     ctx.fillStyle = SK.overlay;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1736,7 +1749,8 @@ function draw() {
     ctx.font = '13px sans-serif';
     ctx.fillText('按空格或点击暂停按钮继续', canvas.width / 2, 68);
     ctx.fillText(MODE_NAMES[mode] + '模式最高分: ' + save.best[mode] + '   爬层: 升 ' + save.stats.climbs + ' / 降 ' + save.stats.descents, canvas.width / 2, 92);
-    ctx.fillText('点"图鉴"按钮查看果子图鉴', canvas.width / 2, 116);
+    ctx.fillText(twoPlayer ? 'P1 方向键 · P2 W/A/S/D · 空格或 F 暂停' : '方向键移动 · 右缘升层左缘降层 · 空格或 F 暂停', canvas.width / 2, 116);
+    ctx.fillText(twoPlayer ? '谁吃果全场加分 · 队友身体可爬 · R 结算后重开' : '撞身撞墙爬层 · R 键结算后秒重开 · 点"图鉴"看果子', canvas.width / 2, 138);
     ctx.textAlign = 'left';
   }
   ctx.restore();
@@ -1848,6 +1862,17 @@ document.addEventListener('keydown', e => {
       showToast('秘技发现:护盾拉满!');
       playSound('ach');
     }
+  }
+
+  if (e.code === 'KeyR') {
+    if (bookOpen || achOpen || replayOpen) return;
+    if (started && (settled || cleared)) {
+      e.preventDefault();
+      reset();
+      started = true;
+      if (soundOn) ensureAudio();
+    }
+    return;
   }
 
   if (e.code === 'KeyF') {
