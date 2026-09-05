@@ -406,7 +406,7 @@ const ACH = [
   {id: 'ghost_pass', name: '超越影子', desc: '无尽分数超过影子纪录'}
 ];
 function defaultSave() {
-  return {v: 2, best: {endless: 0, survival: 0, timed: 0, daily: 0, fog: 0, zen: 0}, sound: false, bgm: false, stats: {climbs: 0, descents: 0, fruits: {}, gates: 0, goldLives: 0, maxCombo: 0}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic', ach: {}};
+  return {v: 2, best: {endless: 0, survival: 0, timed: 0, daily: 0, fog: 0, zen: 0}, sound: false, bgm: false, stats: {climbs: 0, descents: 0, fruits: {}, gates: 0, goldLives: 0, maxCombo: 0, playCount: 0, deaths: 0, daily: {last: '', streak: 0}}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic', ach: {}};
 }
 function loadSave() {
   try {
@@ -439,6 +439,9 @@ function loadSave() {
         gates: Number(s.stats.gates) || 0,
         goldLives: Number(s.stats.goldLives) || 0,
         maxCombo: Number(s.stats.maxCombo) || 0,
+        playCount: Number(s.stats.playCount) || 0,
+        deaths: Number(s.stats.deaths) || 0,
+        daily: (s.stats.daily && typeof s.stats.daily === 'object') ? {last: String(s.stats.daily.last || ''), streak: Number(s.stats.daily.streak) || 0} : {last: '', streak: 0},
         fruits: (s.stats.fruits && typeof s.stats.fruits === 'object') ? s.stats.fruits : {}
       },
       book: (s.book && typeof s.book === 'object') ? s.book : {},
@@ -488,8 +491,10 @@ if (isHoliday()) showHint('holiday', '节日快乐!今天金果更常见');
 const shareBtn = document.getElementById('shareBtn');
 shareBtn.addEventListener('click', () => {
   const daily = save.best.daily || 0;
+  const dSt = save.stats.daily || {};
   const text = '【贪吃蛇·伪三维爬层】我的' + MODE_NAMES[mode] + '模式最高 ' + (save.best[mode] || 0) + ' 分' +
-    (daily > 0 ? ',今日每日挑战 ' + daily + ' 分' : '') +
+    (mode === 'daily' && dSt.streak > 1 ? '(已连续打卡 ' + dSt.streak + ' 天!)' : '') +
+    (daily > 0 && mode !== 'daily' ? ',今日每日挑战 ' + daily + ' 分' : '') +
     '。六种模式+20种果子+隐藏皮肤,来超越我!免费开玩:https://github.com/zzj2004/pseudo3d-snake';
   let ok = false;
   try {
@@ -1039,6 +1044,18 @@ function burst(cx, cy, color, n) {
 function settle(reason) {
   settled = true;
   settleReason = reason;
+  save.stats.playCount = (save.stats.playCount || 0) + 1;
+  if (reason === 'dead') save.stats.deaths = (save.stats.deaths || 0) + 1;
+  if (mode === 'daily') {
+    const today = String(dailySeed());
+    const d = save.stats.daily = save.stats.daily || {last: '', streak: 0};
+    if (d.last !== today) {
+      const yest = String(dailySeed() - 1);
+      d.streak = (d.last === yest) ? (d.streak || 0) + 1 : 1;
+      d.last = today;
+      if (d.streak >= 2) showToast('每日挑战连续打卡 ' + d.streak + ' 天!');
+    }
+  }
   if (mode === 'endless' && score > 0 && ghostRun.length > 30 &&
       (!bestGhost || score > bestGhost.score)) {
     bestGhost = {score: score, path: ghostRun.slice(0, 8000)};
@@ -1749,8 +1766,9 @@ function draw() {
     ctx.font = '13px sans-serif';
     ctx.fillText('按空格或点击暂停按钮继续', canvas.width / 2, 68);
     ctx.fillText(MODE_NAMES[mode] + '模式最高分: ' + save.best[mode] + '   爬层: 升 ' + save.stats.climbs + ' / 降 ' + save.stats.descents, canvas.width / 2, 92);
-    ctx.fillText(twoPlayer ? 'P1 方向键 · P2 W/A/S/D · 空格或 F 暂停' : '方向键移动 · 右缘升层左缘降层 · 空格或 F 暂停', canvas.width / 2, 116);
-    ctx.fillText(twoPlayer ? '谁吃果全场加分 · 队友身体可爬 · R 结算后重开' : '撞身撞墙爬层 · R 键结算后秒重开 · 点"图鉴"看果子', canvas.width / 2, 138);
+    ctx.fillText('第 ' + (save.stats.playCount || 0) + ' 局 · 死亡 ' + (save.stats.deaths || 0) + ' 次' + ((save.stats.daily || {}).streak > 1 ? ' · 每日连续打卡 ' + save.stats.daily.streak + ' 天' : ''), canvas.width / 2, 104);
+    ctx.fillText(twoPlayer ? 'P1 方向键 · P2 W/A/S/D · 空格或 F 暂停' : '方向键移动 · 右缘升层左缘降层 · 空格或 F 暂停', canvas.width / 2, 120);
+    ctx.fillText(twoPlayer ? '谁吃果全场加分 · 队友身体可爬 · R 结算后重开' : '撞身撞墙爬层 · R 键结算后秒重开 · 点"图鉴"看果子', canvas.width / 2, 142);
     ctx.textAlign = 'left';
   }
   ctx.restore();
