@@ -395,9 +395,9 @@ function showHint(key, text) {
 
 const SAVE_KEY = 'snake3d_save';
 const SKINS = {
-  classic: {name: '经典', bg: '#eee', board: '#fff', border: '#000', text: '#000', overlay: 'rgba(255,255,255,0.92)', snake: '#000', head: '#000', tongue: '#d00', p2: '#8a6a00', wallFill: '#fff', wallFrame: '#000', wallHatch: '#bbb', trapPit: '#222', trapSpike: '#aaa', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
-  bamboo: {name: '翠玉竹林', bg: '#dce8d2', board: '#eef7ea', border: '#4e7d46', text: '#2b4a26', overlay: 'rgba(238,247,234,0.92)', snake: '#2e8b4e', head: '#1f6e3c', tongue: '#e0453a', p2: '#b8860b', wallFill: '#f8fcf4', wallFrame: '#4e7d46', wallHatch: '#b9d0ae', trapPit: '#2a3d24', trapSpike: '#8fae7f', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
-  cyber: {name: '赛博2077', bg: '#04060d', board: '#0a0e1a', border: '#00e5ff', text: '#d8f6ff', overlay: 'rgba(6,10,20,0.88)', snake: '#00e5ff', head: '#7df9ff', tongue: '#ff2d95', p2: '#ff2d95', wallFill: '#0e1c2e', wallFrame: '#1d5b74', wallHatch: '#16455a', trapPit: '#14263e', trapSpike: '#6fa8c9', fastCol: '#4dff9d', slowCol: '#5db8ff', dblCol: '#ffc04d', ghostCol: '#9aa8b8', comboCol: '#ffb300', glow: true}
+  classic: {name: '经典', wave: 'triangle', bg: '#eee', board: '#fff', border: '#000', text: '#000', overlay: 'rgba(255,255,255,0.92)', snake: '#000', head: '#000', tongue: '#d00', p2: '#8a6a00', wallFill: '#fff', wallFrame: '#000', wallHatch: '#bbb', trapPit: '#222', trapSpike: '#aaa', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
+  bamboo: {name: '翠玉竹林', wave: 'sine', bg: '#dce8d2', board: '#eef7ea', border: '#4e7d46', text: '#2b4a26', overlay: 'rgba(238,247,234,0.92)', snake: '#2e8b4e', head: '#1f6e3c', tongue: '#e0453a', p2: '#b8860b', wallFill: '#f8fcf4', wallFrame: '#4e7d46', wallHatch: '#b9d0ae', trapPit: '#2a3d24', trapSpike: '#8fae7f', fastCol: '#0a0', slowCol: '#06c', dblCol: '#b80', ghostCol: '#888', comboCol: '#c60', glow: false},
+  cyber: {name: '赛博2077', wave: 'square', bg: '#04060d', board: '#0a0e1a', border: '#00e5ff', text: '#d8f6ff', overlay: 'rgba(6,10,20,0.88)', snake: '#00e5ff', head: '#7df9ff', tongue: '#ff2d95', p2: '#ff2d95', wallFill: '#0e1c2e', wallFrame: '#1d5b74', wallHatch: '#16455a', trapPit: '#14263e', trapSpike: '#6fa8c9', fastCol: '#4dff9d', slowCol: '#5db8ff', dblCol: '#ffc04d', ghostCol: '#9aa8b8', comboCol: '#ffb300', glow: true}
 };
 const FRUIT_DESC = {
   normal: '普通 +1 分', fast: '加速 6 秒', slow: '减速 6 秒', grow: '蛇身 +3',
@@ -449,6 +449,26 @@ const ACH = [
   {id: 'zen20', name: '禅心已久', desc: '禅模式到达第 20 层'},
   {id: 'ghost_pass', name: '超越影子', desc: '无尽分数超过影子纪录'}
 ];
+const ACH_PROG = {
+  first_climb: c => [Math.min(c.st.climbs, 1), 1],
+  tower10: c => [Math.min(c.z, 10), 10],
+  stairs_down: c => [Math.min(c.st.descents, 1), 1],
+  score100: c => [Math.min(c.score, 100), 100],
+  score500: c => [Math.min(c.score, 500), 500],
+  combo16: c => [Math.min(c.st.maxCombo || 0, 16), 16],
+  combo32: c => [Math.min(c.st.maxCombo || 0, 32), 32],
+  gate1: c => [Math.min(c.st.gates || 0, 1), 1],
+  gate3: c => [Math.min(c.st.gates || 0, 3), 3],
+  fruit100: c => [Math.min(c.tot, 100), 100],
+  fruit500: c => [Math.min(c.tot, 500), 500],
+  book10: c => [Math.min(c.book, 10), 10],
+  book20: c => [Math.min(c.book, 20), 20],
+  four_new: c => [(['shield', 'magnet', 'freeze', 'harvest'].filter(t => (c.st.fruits[t] || 0) >= 1)).length, 4],
+  gold_life: c => [Math.min(c.st.goldLives || 0, 10), 10],
+  daily50: c => [Math.min(c.score, 50), 50],
+  fog5: c => [Math.min(c.z, 5), 5],
+  zen20: c => [Math.min(c.z, 20), 20]
+};
 function defaultSave() {
   return {v: 2, best: {endless: 0, survival: 0, timed: 0, daily: 0, fog: 0, zen: 0}, sound: false, bgm: false, stats: {climbs: 0, descents: 0, fruits: {}, gates: 0, goldLives: 0, maxCombo: 0, playCount: 0, deaths: 0, daily: {last: '', streak: 0}, dailyLog: []}, book: {}, skins: {bamboo: false, cyber: false}, skin: 'classic', ach: {}};
 }
@@ -594,7 +614,7 @@ function bgmNote() {
   if (!bgmOn || !audioCtx) return;
   let f = BGM_SEQ[bgmStep % BGM_SEQ.length];
   if (mode === 'fog' || mode === 'zen') f /= 2;
-  tone(f, 0, 0.22, 'triangle', 0.03);
+  tone(f, 0, 0.22, SK.wave || 'triangle', SK.wave === 'square' ? 0.022 : 0.03);
   if (bgmStep % 4 === 0) tone(f / 2, 0, 0.3, 'sine', 0.025);
   bgmStep++;
 }
@@ -1209,7 +1229,7 @@ function tone(freq, delay, dur, type, vol, slideTo) {
   osc.type = type;
   osc.frequency.setValueAtTime(freq, t0);
   if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
-  gain.gain.setValueAtTime(vol, t0);
+  gain.gain.setValueAtTime(type === 'square' ? vol * 0.7 : vol, t0);
   gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
   osc.connect(gain);
   gain.connect(audioCtx.destination);
@@ -1218,34 +1238,35 @@ function tone(freq, delay, dur, type, vol, slideTo) {
 }
 function playSound(name, type) {
   if (!soundOn || !audioCtx) return;
+  const wv = SK.wave || 'triangle';
   if (name === 'eat') {
-    tone(FRUIT_PITCH[type] || 440, 0, 0.09, 'triangle', 0.12);
+    tone(FRUIT_PITCH[type] || 440, 0, 0.09, wv, 0.12);
   } else if (name === 'climb') {
-    tone(330, 0, 0.15, 'sine', 0.12, 660);
+    tone(330, 0, 0.15, wv, 0.12, 660);
   } else if (name === 'descend') {
-    tone(660, 0, 0.15, 'sine', 0.12, 330);
+    tone(660, 0, 0.15, wv, 0.12, 330);
   } else if (name === 'reverse') {
     tone(420, 0, 0.09, 'square', 0.07);
     tone(310, 0.11, 0.13, 'square', 0.07);
   } else if (name === 'teleport') {
-    tone(180, 0, 0.2, 'sine', 0.12, 720);
+    tone(180, 0, 0.2, wv, 0.12, 720);
   } else if (name === 'bomb') {
     tone(150, 0, 0.22, 'square', 0.1, 55);
   } else if (name === 'block') {
-    tone(523, 0, 0.08, 'square', 0.1);
-    tone(784, 0.07, 0.12, 'square', 0.1);
+    tone(523, 0, 0.08, wv, 0.1);
+    tone(784, 0.07, 0.12, wv, 0.1);
   } else if (name === 'ach') {
-    tone(660, 0, 0.1, 'triangle', 0.12);
-    tone(880, 0.09, 0.16, 'triangle', 0.12);
+    tone(660, 0, 0.1, wv, 0.12);
+    tone(880, 0.09, 0.16, wv, 0.12);
   } else if (name === 'settle') {
-    tone(659, 0, 0.16, 'triangle', 0.12);
-    tone(523, 0.15, 0.16, 'triangle', 0.12);
-    tone(392, 0.3, 0.3, 'triangle', 0.12);
+    tone(659, 0, 0.16, wv, 0.12);
+    tone(523, 0.15, 0.16, wv, 0.12);
+    tone(392, 0.3, 0.3, wv, 0.12);
   } else if (name === 'clear') {
-    tone(523, 0, 0.14, 'triangle', 0.12);
-    tone(659, 0.13, 0.14, 'triangle', 0.12);
-    tone(784, 0.26, 0.14, 'triangle', 0.12);
-    tone(1047, 0.39, 0.32, 'triangle', 0.12);
+    tone(523, 0, 0.14, wv, 0.12);
+    tone(659, 0.13, 0.14, wv, 0.12);
+    tone(784, 0.26, 0.14, wv, 0.12);
+    tone(1047, 0.39, 0.32, wv, 0.12);
   }
 }
 
@@ -1402,6 +1423,9 @@ function drawAch() {
   ctx.fillStyle = SK.overlay;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const got = ACH.filter(a => save.ach[a.id]).length;
+  const totAll = Object.values(save.stats.fruits).reduce((a, b) => a + b, 0);
+  const bookGot = FRUIT_ORDER.filter(e => save.book[e[1]]).length;
+  const achCtx = {st: save.stats, z: maxZRun, score, tot: totAll, book: bookGot};
   ctx.fillStyle = SK.text;
   ctx.font = 'bold ' + Math.round(18 * U) + 'px sans-serif';
   ctx.textAlign = 'center';
@@ -1421,6 +1445,15 @@ function drawAch() {
       y = 82 * U;
     }
     const x = colX[col];
+    let progText = '';
+    if (!save.ach[a.id] && ACH_PROG[a.id]) {
+      let cur = 0, mx = 0;
+      try {
+        const r = ACH_PROG[a.id](achCtx) || [0, 0];
+        cur = r[0]; mx = r[1];
+      } catch (e) {}
+      if (mx > 1 && cur > 0) progText = ' (' + cur + '/' + mx + ')';
+    }
     if (save.ach[a.id]) {
       ctx.fillStyle = SK.glow ? '#59c9ff' : '#2a7';
       ctx.fillText('✓', x, y);
@@ -1430,7 +1463,7 @@ function drawAch() {
       ctx.fillStyle = SK.text;
       ctx.globalAlpha = 0.35;
       ctx.fillText('·', x, y);
-      ctx.fillText(a.name + ':' + a.desc, x + 14 * U, y);
+      ctx.fillText(a.name + ':' + a.desc + progText, x + 14 * U, y);
       ctx.globalAlpha = 1;
     }
     y += 18.5 * U;
